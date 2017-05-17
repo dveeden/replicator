@@ -11,15 +11,9 @@ public enum RawEventType {
 
     UPDATE_ROWS_EVENT,
 
-    UPDATE_ROWS_EVENT_V2,
-
     WRITE_ROWS_EVENT,
 
-    WRITE_ROWS_EVENT_V2,
-
     DELETE_ROWS_EVENT,
-
-    DELETE_ROWS_EVENT_V2,
 
     XID_EVENT,
 
@@ -27,6 +21,8 @@ public enum RawEventType {
 
     ROTATE_EVENT,
 
-    STOP_EVENT
+    STOP_EVENT,
+
+    UNKNOWN
 
 }

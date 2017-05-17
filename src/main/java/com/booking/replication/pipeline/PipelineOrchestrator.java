@@ -13,6 +13,7 @@ import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
 import com.booking.replication.binlog.RawBinlogEventInfoExtractor;
+import com.booking.replication.binlog.RawEventType;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 
 import com.booking.replication.replicant.ReplicantPool;
@@ -273,7 +274,7 @@ public class PipelineOrchestrator extends Thread {
                     && (event.getTimestamp() > 0) ) {
                 replDelay = event.getTimestampOfReceipt() - event.getTimestamp();
             } else {
-                if (event.is_ROTATE_EVENT()) {
+                if (event.isRotate()) {
                     // do nothing, expected for rotate event
                 } else {
                     // warn, not expected for other events
@@ -309,10 +310,11 @@ public class PipelineOrchestrator extends Thread {
         }
 
         // Process Event
-        switch (event.getHeader().getEventType()) {
+        RawEventType rawEventType = event.getEventType();
+        switch (rawEventType) {
 
             // Check for DDL and pGTID:
-            case MySQLConstants.QUERY_EVENT:
+            case QUERY_EVENT:
                 doTimestampOverride(event);
                 String querySQL = ((QueryEvent) event).getSql().toString();
 
@@ -408,7 +410,7 @@ public class PipelineOrchestrator extends Thread {
                 break;
 
             // TableMap event:
-            case MySQLConstants.TABLE_MAP_EVENT:
+            case TABLE_MAP_EVENT:
                 String tableName = ((TableMapEvent) event).getTableName().toString();
 
                 if (tableName.equals(Constants.HEART_BEAT_TABLE)) {
@@ -451,31 +453,28 @@ public class PipelineOrchestrator extends Thread {
                 break;
 
             // Data event:
-            case MySQLConstants.UPDATE_ROWS_EVENT:
-            case MySQLConstants.UPDATE_ROWS_EVENT_V2:
+            case UPDATE_ROWS_EVENT:
                 doTimestampOverride(event);
                 augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 updateEventCounter.mark();
                 break;
 
-            case MySQLConstants.WRITE_ROWS_EVENT:
-            case MySQLConstants.WRITE_ROWS_EVENT_V2:
+            case WRITE_ROWS_EVENT:
                 doTimestampOverride(event);
                 augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 insertEventCounter.mark();
                 break;
 
-            case MySQLConstants.DELETE_ROWS_EVENT:
-            case MySQLConstants.DELETE_ROWS_EVENT_V2:
+            case DELETE_ROWS_EVENT:
                 doTimestampOverride(event);
                 augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 deleteEventCounter.mark();
                 break;
 
-            case MySQLConstants.XID_EVENT:
+            case XID_EVENT:
                 // Later we may want to tag previous data events with xid_id
                 // (so we can know if events were in the same transaction).
                 doTimestampOverride(event);
@@ -485,13 +484,13 @@ public class PipelineOrchestrator extends Thread {
                 break;
 
             // reset the fakeMicrosecondCounter at the beginning of the new binlog file
-            case MySQLConstants.FORMAT_DESCRIPTION_EVENT:
+            case FORMAT_DESCRIPTION_EVENT:
                 fakeMicrosecondCounter = 0;
                 applier.applyFormatDescriptionEvent((FormatDescriptionEvent) event);
                 break;
 
             // flush buffer at the end of binlog file
-            case MySQLConstants.ROTATE_EVENT:
+            case ROTATE_EVENT:
                 RotateEvent rotateEvent = (RotateEvent) event;
                 applier.applyRotateEvent(rotateEvent);
                 LOGGER.info("End of binlog file. Waiting for all tasks to finish before moving forward...");
@@ -537,13 +536,13 @@ public class PipelineOrchestrator extends Thread {
 
             // Events that we expect to appear in the binlog, but we don't do
             // any extra processing.
-            case MySQLConstants.STOP_EVENT:
+            case STOP_EVENT:
                 break;
 
             // Events that we do not expect to appear in the binlog
             // so a warning should be logged for those types
             default:
-                LOGGER.warn("Unexpected event type: " + event.getHeader().getEventType());
+                LOGGER.warn("Unexpected event type: " + rawEventType);
                 break;
         }
     }
