@@ -12,8 +12,9 @@ import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
+import com.booking.replication.binlog.RawBinlogEventInfoExtractor;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
-import com.booking.replication.queues.ReplicatorQueues;
+
 import com.booking.replication.replicant.ReplicantPool;
 import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.exception.SchemaTransitionException;
@@ -35,6 +36,8 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 
@@ -55,7 +58,7 @@ public class PipelineOrchestrator extends Thread {
     public  final  Configuration                   configuration;
     private final  ReplicantPool                   replicantPool;
     private final  Applier                         applier;
-    private final  ReplicatorQueues                queues;
+    private final BlockingQueue<RawBinlogEventInfoExtractor>    rawBinlogEventQueue;
     private final  QueryInspector                  queryInspector;
     private static EventAugmenter                  eventAugmenter;
     private static ActiveSchemaVersion             activeSchemaVersion;
@@ -123,13 +126,13 @@ public class PipelineOrchestrator extends Thread {
     }
 
     public PipelineOrchestrator(
-            ReplicatorQueues repQueues,
+            LinkedBlockingQueue<RawBinlogEventInfoExtractor> rawBinlogEventQueue,
             PipelinePosition pipelinePosition,
             Configuration repcfg,
             Applier applier,
             ReplicantPool replicantPool) throws SQLException, URISyntaxException {
 
-        queues = repQueues;
+        this.rawBinlogEventQueue = rawBinlogEventQueue;
         configuration = repcfg;
 
         this.replicantPool = replicantPool;
@@ -178,11 +181,11 @@ public class PipelineOrchestrator extends Thread {
 
         while (isRunning()) {
             try {
-                if (queues.rawQueue.size() > 0) {
-                    BinlogEventV4 event =
-                            queues.rawQueue.poll(100, TimeUnit.MILLISECONDS);
+                if (rawBinlogEventQueue.size() > 0) {
 
-                    if (event == null) {
+                    RawBinlogEventInfoExtractor rawBinlogEvent = this.rawBinlogEventQueue.poll(100, TimeUnit.MILLISECONDS);
+
+                    if (rawBinlogEvent == null) {
                         LOGGER.warn("Poll timeout. Will sleep for 1s and try again.");
                         Thread.sleep(1000);
                         continue;
@@ -196,12 +199,12 @@ public class PipelineOrchestrator extends Thread {
                     pipelinePosition.updatCurrentPipelinePosition(
                         replicantPool.getReplicantDBActiveHost(),
                         replicantPool.getReplicantDBActiveHostServerID(),
-                        event,
+                        rawBinlogEvent,
                         fakeMicrosecondCounter
                     );
 
-                    if (! skipEvent(event)) {
-                        calculateAndPropagateChanges(event);
+                    if (! skipEvent(rawBinlogEvent)) {
+                        calculateAndPropagateChanges(rawBinlogEvent);
                         eventsProcessedCounter.mark();
                     } else {
                         eventsSkippedCounter.mark();
@@ -252,7 +255,7 @@ public class PipelineOrchestrator extends Thread {
      *      a. match column names and types
      * </p>
      */
-    public void calculateAndPropagateChanges(BinlogEventV4 event)
+    public void calculateAndPropagateChanges(RawBinlogEventInfoExtractor event)
             throws Exception, TableMapException {
 
         AugmentedRowsEvent augmentedRowsEvent;
@@ -265,12 +268,12 @@ public class PipelineOrchestrator extends Thread {
         // Note: there is a bug in open replicator which results in rotate event having timestamp value = 0.
         //       This messes up the replication delay time series. The workaround is not to calculate the
         //       replication delay at rotate event.
-        if (event.getHeader() != null) {
-            if ((event.getHeader().getTimestampOfReceipt() > 0)
-                    && (event.getHeader().getTimestamp() > 0) ) {
-                replDelay = event.getHeader().getTimestampOfReceipt() - event.getHeader().getTimestamp();
+        if (event.hasHeader()) {
+            if ((event.getTimestampOfReceipt() > 0)
+                    && (event.getTimestamp() > 0) ) {
+                replDelay = event.getTimestampOfReceipt() - event.getTimestamp();
             } else {
-                if (event.getHeader().getEventType() == MySQLConstants.ROTATE_EVENT) {
+                if (event.is_ROTATE_EVENT()) {
                     // do nothing, expected for rotate event
                 } else {
                     // warn, not expected for other events

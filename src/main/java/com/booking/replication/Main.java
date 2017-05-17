@@ -77,7 +77,7 @@ public class Main {
                     public void run() {
                         try {
                             Metrics.startReporters(configuration);
-                            new Replicator(configuration, healthTracker, Metrics.registry.counter(name("events", "applierEventsObserved"))).start();
+                            new Replicator(configuration, healthTracker, Metrics.registry.counter(name("events", "applierEventsObserved")), binlogProvider).start();
                         } catch (Exception e) {
                             e.printStackTrace();
                         }

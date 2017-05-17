@@ -67,7 +67,7 @@ public class Overseer extends Thread {
     }
 
     private void makeSureProducerIsRunning() {
-        if (!producer.getOpenReplicator().isRunning()) {
+        if (!producer.isRunning()) {
             LOGGER.error("Producer stopped running at pipeline position: "
                     + pipelinePosition.getCurrentPosition().getBinlogFilename()
                     + ":"

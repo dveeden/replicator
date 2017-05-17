@@ -1,13 +1,13 @@
 package com.booking.replication;
 
 import com.booking.replication.applier.*;
+import com.booking.replication.binlog.RawBinlogEventInfoExtractor;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.monitor.*;
 import com.booking.replication.pipeline.BinlogEventProducer;
 import com.booking.replication.pipeline.BinlogPositionInfo;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.pipeline.PipelinePosition;
-import com.booking.replication.queues.ReplicatorQueues;
 import com.booking.replication.replicant.ReplicantPool;
 
 import com.booking.replication.sql.QueryInspector;
@@ -21,8 +21,8 @@ import org.slf4j.LoggerFactory;
 import spark.Spark;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static spark.Spark.get;
 
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -35,19 +35,31 @@ import java.util.concurrent.TimeUnit;
  */
 public class Replicator {
 
-    private final BinlogEventProducer  binlogEventProducer;
-    private final PipelineOrchestrator pipelineOrchestrator;
-    private final Overseer             overseer;
-    private final ReplicantPool        replicantPool;
-    private final PipelinePosition     pipelinePosition;
-    private final ReplicatorHealthTrackerProxy healthTracker;
+    private final int                                 binlogParserProviderCode;
+    private final LinkedBlockingQueue<RawBinlogEventInfoExtractor> rawBinlogEventQueue;
+    private final BinlogEventProducer                 binlogEventProducer;
+    private final PipelineOrchestrator                pipelineOrchestrator;
+    private final Overseer                            overseer;
+    private final ReplicantPool                       replicantPool;
+    private final PipelinePosition                    pipelinePosition;
+    private final ReplicatorHealthTrackerProxy        healthTracker;
+
+    private static final int MAX_RAW_QUEUE_SIZE = Constants.MAX_RAW_QUEUE_SIZE;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Replicator.class);
 
     // Replicator()
-    public Replicator(Configuration configuration, ReplicatorHealthTrackerProxy healthTracker, Counter interestingEventsObservedCounter) throws Exception {
+    public Replicator(
+          Configuration configuration,
+          ReplicatorHealthTrackerProxy healthTracker,
+          Counter interestingEventsObservedCounter,
+          int binlogParserProviderCode
+        ) throws Exception {
 
         this.healthTracker = healthTracker;
+
+        // TODO: add parserProviderCode to config
+        this.binlogParserProviderCode = binlogParserProviderCode;
 
         boolean mysqlFailoverActive = false;
         if (configuration.getMySQLFailover() != null) {
@@ -226,15 +238,15 @@ public class Replicator {
                 pipelinePosition.getStartPosition().getBinlogFilename(),
                 pipelinePosition.getStartPosition().getBinlogPosition()));
 
-        // Queues
-        ReplicatorQueues replicatorQueues = new ReplicatorQueues();
+        rawBinlogEventQueue = new LinkedBlockingQueue<>(MAX_RAW_QUEUE_SIZE);
 
         // Producer
         binlogEventProducer = new BinlogEventProducer(
-            replicatorQueues.rawQueue,
+            rawBinlogEventQueue,
             pipelinePosition,
             configuration,
-            replicantPool
+            replicantPool,
+            binlogParserProviderCode
         );
 
         // Validation service
@@ -271,14 +283,14 @@ public class Replicator {
             this.healthTracker.setTrackerImplementation(new ReplicatorHealthTrackerDummy());
         }
 
-        // Orchestrator
+        // Pipeline
         pipelineOrchestrator = new PipelineOrchestrator(
-            replicatorQueues,
+            rawBinlogEventQueue,
             pipelinePosition,
             configuration,
             applier,
             replicantPool
-    );
+        );
 
         // Overseer
         overseer = new Overseer(
@@ -311,10 +323,10 @@ public class Replicator {
                 // Producer
                 try {
                     // let open replicator stop its own threads
-                    if (binlogEventProducer.getOpenReplicator().isRunning()) {
+                    if (binlogEventProducer.isRunning()) {
                         LOGGER.info("Stopping Producer...");
                         binlogEventProducer.stop(10000, TimeUnit.MILLISECONDS);
-                        if (!binlogEventProducer.getOpenReplicator().isRunning()) {
+                        if (!binlogEventProducer.isRunning()) {
                             LOGGER.info("Successfully stopped Producer thread");
                         } else {
                             throw new Exception("Failed to stop Producer thread");
