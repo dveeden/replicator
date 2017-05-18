@@ -1,21 +1,23 @@
 package com.booking.replication.binlog;
 
-import com.github.shyiko.mysql.binlog.event.Event;
-import com.github.shyiko.mysql.binlog.event.EventType;
+import com.github.shyiko.mysql.binlog.event.*;
 import com.google.code.or.binlog.BinlogEventV4;
+import com.google.code.or.binlog.impl.event.*;
 import com.google.code.or.common.util.MySQLConstants;
 
 /**
  * Generic class for working with binlog events from different parser providers
  */
-public class RawBinlogEventInfoExtractor {
+public class RawBinlogEvent {
 
     private final int     BINLOG_PARSER_PROVIDER;
     private BinlogEventV4 binlogEventV4;
     private Event         binlogConnectorEvent;
     private long          timestampOfReceipt;
+    private long          timestampOfBinlogEvent;
+    private final boolean USING_DEPRECATED_PARSER;
 
-    public RawBinlogEventInfoExtractor(Object event) throws Exception {
+    public RawBinlogEvent(Object event) throws Exception {
 
         // timeOfReceipt in OpenReplicator is set as:
         //
@@ -33,14 +35,23 @@ public class RawBinlogEventInfoExtractor {
             // this can be done in a nicer way by wraping the twp respective types
             // into wraper objects which have an additional property 'ON/OFF' so
             // we avoid the null assignmetns. Since we use th
-            binlogEventV4 = (BinlogEventV4) event;
             binlogConnectorEvent = null;
+
+            binlogEventV4 = (BinlogEventV4) event;
+            timestampOfBinlogEvent = binlogEventV4.getHeader().getTimestamp();
+
+            USING_DEPRECATED_PARSER = true;
 
         }
         else if (event instanceof Event) {
             BINLOG_PARSER_PROVIDER = BinlogEventParserProviderCode.SHYIKO;
+
             binlogEventV4 = null;
+
             binlogConnectorEvent = (Event) event;
+            timestampOfBinlogEvent = binlogConnectorEvent.getHeader().getTimestamp();
+
+            USING_DEPRECATED_PARSER = false;
         }
         else {
             throw new Exception("Unsupported parser!");
@@ -60,6 +71,9 @@ public class RawBinlogEventInfoExtractor {
        return this.getTimestampOfReceipt();
     }
 
+    // timestamp received from OpenReplicator is in millisecond form,
+    // but the millisecond part is actually 000 (for example 1447755881000)
+    // TODO: verify that this is the same in Binlog Connector
     public long getTimestamp() {
         if (binlogEventV4 != null) {
             return binlogEventV4.getHeader().getTimestamp();
@@ -69,6 +83,23 @@ public class RawBinlogEventInfoExtractor {
         }
     }
 
+    public String getBinlogFilename() {
+        if (USING_DEPRECATED_PARSER) {
+            return getOpenReplicatorEventBinlogFileName(binlogEventV4);
+        }
+        else {
+            // TODO: need to do the whole dance as with open replicator, but more complicated
+            // there is no binlog file name in the event, so need to buffer the last seen
+            // binlog file name
+            return ((RotateEventData) binlogConnectorEvent.getData()).getBinlogFilename();
+
+        }
+    }
+
+    public void overrideTimestamp(long newTimestampValue) {
+        this.timestampOfBinlogEvent = newTimestampValue;
+    }
+
     public boolean isQuery() {
         // All constants from OR are Enums in BinlogConnector so need to check for both
         if (binlogEventV4 != null) {
@@ -76,6 +107,15 @@ public class RawBinlogEventInfoExtractor {
         }
         else {
             return (binlogConnectorEvent.getHeader().getEventType() == EventType.QUERY);
+        }
+    }
+
+    public String getQuerySQL() {
+        if (USING_DEPRECATED_PARSER) {
+            return    ((QueryEvent) binlogEventV4).getSql().toString();
+        }
+        else {
+            return ((QueryEventData) binlogConnectorEvent.getData()).getSql();
         }
     }
 
@@ -251,5 +291,84 @@ public class RawBinlogEventInfoExtractor {
             }
         }
         return  t;
+    }
+
+    private String getOpenReplicatorEventBinlogFileName(BinlogEventV4 event) {
+
+        switch (event.getHeader().getEventType()) {
+
+            // Query Event:
+            case MySQLConstants.QUERY_EVENT:
+                return  ((QueryEvent) event).getBinlogFilename();
+
+            // TableMap event:
+            case MySQLConstants.TABLE_MAP_EVENT:
+                return ((TableMapEvent) event).getBinlogFilename();
+
+            case MySQLConstants.UPDATE_ROWS_EVENT:
+            case MySQLConstants.UPDATE_ROWS_EVENT_V2:
+            case MySQLConstants.WRITE_ROWS_EVENT:
+            case MySQLConstants.WRITE_ROWS_EVENT_V2:
+            case MySQLConstants.DELETE_ROWS_EVENT:
+            case MySQLConstants.DELETE_ROWS_EVENT_V2:
+                return ((AbstractRowEvent) event).getBinlogFilename();
+
+            case MySQLConstants.XID_EVENT:
+                return ((XidEvent) event).getBinlogFilename();
+
+            case MySQLConstants.ROTATE_EVENT:
+                return ((RotateEvent) event).getBinlogFilename();
+
+            case MySQLConstants.FORMAT_DESCRIPTION_EVENT:
+                return ((FormatDescriptionEvent) event).getBinlogFilename();
+
+            case MySQLConstants.STOP_EVENT:
+                return ((StopEvent) event).getBinlogFilename();
+
+            default:
+                // since it's not rotate event or format description event, the binlog file
+                // has not changed, so return the last recorded
+                return this.getCurrentPosition().getBinlogFilename();
+        }
+    }
+
+    private long getOpenReplicatorEventBinlogPosition(BinlogEventV4 event) {
+
+        switch (event.getHeader().getEventType()) {
+
+            // Query Event:
+            case MySQLConstants.QUERY_EVENT:
+                return  ((QueryEvent) event).getHeader().getPosition();
+
+            // TableMap event:
+            case MySQLConstants.TABLE_MAP_EVENT:
+                return ((TableMapEvent) event).getHeader().getPosition();
+
+            case MySQLConstants.UPDATE_ROWS_EVENT:
+            case MySQLConstants.UPDATE_ROWS_EVENT_V2:
+            case MySQLConstants.WRITE_ROWS_EVENT:
+            case MySQLConstants.WRITE_ROWS_EVENT_V2:
+            case MySQLConstants.DELETE_ROWS_EVENT:
+            case MySQLConstants.DELETE_ROWS_EVENT_V2:
+                return ((AbstractRowEvent) event).getHeader().getPosition();
+
+            case MySQLConstants.XID_EVENT:
+                return ((XidEvent) event).getHeader().getPosition();
+
+            case MySQLConstants.ROTATE_EVENT:
+                return ((RotateEvent) event).getHeader().getPosition();
+
+            case MySQLConstants.FORMAT_DESCRIPTION_EVENT:
+                // workaround for a bug in open replicator which sets next position to 0, so
+                // position turns out to be negative. Since it is always 4 for this event type,
+                // we just use 4.
+                return 4L;
+
+            case MySQLConstants.STOP_EVENT:
+                return ((StopEvent) event).getHeader().getPosition();
+
+            default:
+                return event.getHeader().getPosition();
+        }
     }
 }

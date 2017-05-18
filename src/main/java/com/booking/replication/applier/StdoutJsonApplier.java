@@ -6,10 +6,7 @@ import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
-import com.google.code.or.binlog.BinlogEventV4;
-
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.QueryEvent;
 import com.google.code.or.binlog.impl.event.RotateEvent;
 import com.google.code.or.binlog.impl.event.TableMapEvent;
 import com.google.code.or.binlog.impl.event.XidEvent;
@@ -47,7 +44,7 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
-    public void waitUntilAllRowsAreCommitted(BinlogEventV4 event) {
+    public void waitUntilAllRowsAreCommitted() {
 
         try {
             LOGGER.info("Sleeping as to simulate waiting for all rows being committed");
@@ -117,7 +114,7 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
+    public void applyCommitQueryEvent() {
         if (VERBOSE) {
             LOGGER.info("COMMIT");
             for (String table : stats.keySet()) {

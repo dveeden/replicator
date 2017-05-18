@@ -4,7 +4,6 @@ import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.codahale.metrics.Counter;
-import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.*;
 
 import java.io.IOException;
@@ -40,8 +39,8 @@ public class EventCountingApplier implements Applier {
     }
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
-        wrapped.applyCommitQueryEvent(event);
+    public void applyCommitQueryEvent() {
+        wrapped.applyCommitQueryEvent();
         counter.inc();
     }
 
@@ -80,7 +79,7 @@ public class EventCountingApplier implements Applier {
     }
 
     @Override
-    public void waitUntilAllRowsAreCommitted(BinlogEventV4 event) throws IOException, ApplierException {
-        wrapped.waitUntilAllRowsAreCommitted(event);
+    public void waitUntilAllRowsAreCommitted() throws IOException, ApplierException {
+        wrapped.waitUntilAllRowsAreCommitted();
     }
 }

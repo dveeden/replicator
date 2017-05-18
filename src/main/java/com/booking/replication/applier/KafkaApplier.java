@@ -11,9 +11,7 @@ import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
-import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.QueryEvent;
 import com.google.code.or.binlog.impl.event.RotateEvent;
 import com.google.code.or.binlog.impl.event.TableMapEvent;
 import com.google.code.or.binlog.impl.event.XidEvent;
@@ -362,7 +360,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
+    public void applyCommitQueryEvent() {
 
     }
 
@@ -402,7 +400,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void waitUntilAllRowsAreCommitted(BinlogEventV4 event) {
+    public void waitUntilAllRowsAreCommitted() {
         final Timer.Context context = closingTimer.time();
         // Producer close does the waiting, see documentation.
         producer.close();

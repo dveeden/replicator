@@ -1,7 +1,7 @@
 package com.booking.replication;
 
 import com.booking.replication.applier.*;
-import com.booking.replication.binlog.RawBinlogEventInfoExtractor;
+import com.booking.replication.binlog.RawBinlogEvent;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.monitor.*;
 import com.booking.replication.pipeline.BinlogEventProducer;
@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
 public class Replicator {
 
     private final int                                 binlogParserProviderCode;
-    private final LinkedBlockingQueue<RawBinlogEventInfoExtractor> rawBinlogEventQueue;
+    private final LinkedBlockingQueue<RawBinlogEvent> rawBinlogEventQueue;
     private final BinlogEventProducer                 binlogEventProducer;
     private final PipelineOrchestrator                pipelineOrchestrator;
     private final Overseer                            overseer;

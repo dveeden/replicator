@@ -8,7 +8,7 @@ import com.booking.replication.Metrics;
 
 import com.booking.replication.binlog.BinlogEventParserProviderCode;
 import com.booking.replication.binlog.BinlogEventParserProviderFactory;
-import com.booking.replication.binlog.RawBinlogEventInfoExtractor;
+import com.booking.replication.binlog.RawBinlogEvent;
 import com.booking.replication.replicant.ReplicantPool;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
@@ -39,7 +39,7 @@ public class BinlogEventProducer {
     // queue is private, but it will reference the same queue
     // as the consumer object
 
-    private final BlockingQueue<RawBinlogEventInfoExtractor> rawBinlogEventQueue;
+    private final BlockingQueue<RawBinlogEvent> rawBinlogEventQueue;
 
     private final PipelinePosition pipelinePosition;
 
@@ -65,7 +65,7 @@ public class BinlogEventProducer {
      */
     public BinlogEventProducer(
 
-        LinkedBlockingQueue<RawBinlogEventInfoExtractor> rawBinlogEventQueue,
+        LinkedBlockingQueue<RawBinlogEvent> rawBinlogEventQueue,
         PipelinePosition                    pipelinePosition,
         Configuration                       configuration,
         ReplicantPool                       replicantPool,
@@ -124,7 +124,7 @@ public class BinlogEventProducer {
                             // or add push method that can accept multiple event types)
                             boolean added = false;
                             try {
-                                RawBinlogEventInfoExtractor rawBinlogEvent = new RawBinlogEventInfoExtractor(event);
+                                RawBinlogEvent rawBinlogEvent = new RawBinlogEvent(event);
                                 added = rawBinlogEventQueue.offer(rawBinlogEvent, 100, TimeUnit.MILLISECONDS);
                             } catch (Exception e) {
                                 LOGGER.error("rawBinlogEventsQueue.offer failed.", e);
@@ -177,7 +177,7 @@ public class BinlogEventProducer {
                             backPressureSleep();
                             boolean added = false;
                             try {
-                                RawBinlogEventInfoExtractor rawBinlogEvent = new RawBinlogEventInfoExtractor(event);
+                                RawBinlogEvent rawBinlogEvent = new RawBinlogEvent(event);
                                 added = rawBinlogEventQueue.offer(rawBinlogEvent, 100, TimeUnit.MILLISECONDS);
                             } catch (Exception e) {
                                 LOGGER.error("rawBinlogEventsQueue.offer failed ", e);

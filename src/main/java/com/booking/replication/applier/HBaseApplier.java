@@ -13,10 +13,8 @@ import com.booking.replication.schema.HBaseSchemaManager;
 import com.booking.replication.schema.TableNameMapper;
 import com.booking.replication.validation.ValidationService;
 import com.codahale.metrics.Counter;
-import com.google.code.or.binlog.BinlogEventV4;
 
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.QueryEvent;
 import com.google.code.or.binlog.impl.event.RotateEvent;
 import com.google.code.or.binlog.impl.event.TableMapEvent;
 import com.google.code.or.binlog.impl.event.XidEvent;
@@ -82,7 +80,7 @@ public class HBaseApplier implements Applier {
 
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
+    public void applyCommitQueryEvent() {
         markCurrentTransactionForCommit();
     }
 
@@ -253,7 +251,7 @@ public class HBaseApplier implements Applier {
     }
 
     @Override
-    public void waitUntilAllRowsAreCommitted(BinlogEventV4 event) throws IOException, ApplierException {
+    public void waitUntilAllRowsAreCommitted() throws IOException, ApplierException {
         boolean wait = true;
 
         while (wait) {
