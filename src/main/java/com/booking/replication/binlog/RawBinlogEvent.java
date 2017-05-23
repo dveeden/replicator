@@ -17,6 +17,12 @@ public class RawBinlogEvent {
     private long          timestampOfBinlogEvent;
     public final boolean USING_DEPRECATED_PARSER;
 
+    public void setBinlogFilename(String binlogFilename) {
+        this.binlogFilename = binlogFilename;
+    }
+
+    private String binlogFilename;
+
     public RawBinlogEvent(Object event) throws Exception {
 
         // timeOfReceipt in OpenReplicator is set as:
@@ -210,6 +216,7 @@ public class RawBinlogEvent {
         }
     }
 
+    // TYPE
     public RawEventType getEventType() {
 
         RawEventType t = RawEventType.UNKNOWN;
@@ -293,6 +300,18 @@ public class RawBinlogEvent {
         return  t;
     }
 
+    // #####################################################
+    // FILE NAME
+    public String getFilename() {
+        if (this.USING_DEPRECATED_PARSER) {
+            return getOpenReplicatorEventBinlogFileName(this.binlogEventV4);
+        }
+        else {
+           // since binlog connector only has file name in the rotate event and we need it
+           // in other events, we set it in the producer and have it available here.
+            return binlogFilename;
+        }
+    }
     private String getOpenReplicatorEventBinlogFileName(BinlogEventV4 event) {
 
         switch (event.getHeader().getEventType()) {
@@ -326,9 +345,26 @@ public class RawBinlogEvent {
                 return ((StopEvent) event).getBinlogFilename();
 
             default:
-                // since it's not rotate event or format description event, the binlog file
-                // has not changed, so return the last recorded
-                return this.getCurrentPosition().getBinlogFilename();
+                // TODO: handle this on the caller side - default to current pipeline position
+                // since it has not changed since its not format or rotate event
+                return null;
+        }
+    }
+
+    // POSITION
+    public long getPosition() {
+        if (this.USING_DEPRECATED_PARSER) {
+            return getOpenReplicatorEventBinlogPosition(this.binlogEventV4);
+        }
+        else {
+
+            // this EventHeaderV4 implements EventHeader and is returned by Event.getHeader() but
+            // needs to be explicitly casted since getHeader returns <T extends EventHeader> T
+            // look at
+            //      https://github.com/shyiko/mysql-binlog-connector-java/blob/eead0ec2338f7229ba74a7a04188f4967f13d4b7/src/main/java/com/github/shyiko/mysql/binlog/event/Event.java
+            // and
+            //      https://github.com/shyiko/mysql-binlog-connector-java/blob/eead0ec2338f7229ba74a7a04188f4967f13d4b7/src/main/java/com/github/shyiko/mysql/binlog/event/EventHeaderV4.java
+            return ((EventHeaderV4) this.binlogConnectorEvent.getHeader()).getPosition();
         }
     }
 

@@ -373,7 +373,7 @@ public class PipelineOrchestrator extends Thread {
                         String currentBinlogFileName =
                                 pipelinePosition.getCurrentPosition().getBinlogFilename();
 
-                        long currentBinlogPosition = event.getHeader().getPosition();
+                        long currentBinlogPosition = event.getPosition();
 
                         String pseudoGTID          = pipelinePosition.getCurrentPseudoGTID();
                         String pseudoGTIDFullQuery = pipelinePosition.getCurrentPseudoGTIDFullQuery();

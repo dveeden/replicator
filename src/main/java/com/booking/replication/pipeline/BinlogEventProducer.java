@@ -29,7 +29,7 @@ import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-
+import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
 
 /**
  * Simple wrapper for Open Replicator. Writes events to blocking queue.
@@ -125,6 +125,12 @@ public class BinlogEventProducer {
                             boolean added = false;
                             try {
                                 RawBinlogEvent rawBinlogEvent = new RawBinlogEvent(event);
+
+                                // binlog file name of the last red event. Inject in the
+                                // raw event object since we need it later for each event.
+                                rawBinlogEvent.setBinlogFilename(binaryLogClient.getBinlogFilename());
+                                // TODO: set in the RawBinlogEvent constructor and make immutable
+
                                 added = rawBinlogEventQueue.offer(rawBinlogEvent, 100, TimeUnit.MILLISECONDS);
                             } catch (Exception e) {
                                 LOGGER.error("rawBinlogEventsQueue.offer failed.", e);
