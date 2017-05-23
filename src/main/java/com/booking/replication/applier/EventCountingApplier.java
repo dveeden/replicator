@@ -2,6 +2,7 @@ package com.booking.replication.applier;
 
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_TableMap;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.codahale.metrics.Counter;
 import com.google.code.or.binlog.impl.event.*;
@@ -73,7 +74,7 @@ public class EventCountingApplier implements Applier {
     }
 
     @Override
-    public void applyTableMapEvent(TableMapEvent event) {
+    public void applyTableMapEvent(RawBinlogEvent_TableMap event) {
         wrapped.applyTableMapEvent(event);
         counter.inc();
     }

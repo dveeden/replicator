@@ -1,6 +1,7 @@
 package com.booking.replication.pipeline;
 
 import com.booking.replication.binlog.RawBinlogEvent;
+import com.booking.replication.binlog.RawBinlogEvent_TableMap;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.AbstractRowEvent;
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
@@ -168,10 +169,10 @@ public class PipelinePosition {
     }
 
     public void updatePipelineLastMapEventPosition(
-        String host,
-        int serverID,
-        TableMapEvent event,
-        long fakeMicrosecondCounter
+            String host,
+            int serverID,
+            RawBinlogEvent_TableMap event,
+            long fakeMicrosecondCounter
     ) {
         if (this.getLastMapEventPosition() == null) {
             this.setLastMapEventPosition(new BinlogPositionInfo(

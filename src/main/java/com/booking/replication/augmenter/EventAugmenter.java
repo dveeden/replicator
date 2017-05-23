@@ -3,6 +3,7 @@ package com.booking.replication.augmenter;
 import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
+import com.booking.replication.binlog.RawBinlogEvent;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.column.ColumnSchema;
@@ -65,7 +66,7 @@ public class EventAugmenter {
         return activeSchemaVersion;
     }
 
-    public HashMap<String, String> getSchemaTransitionSequence(BinlogEventV4 event) throws SchemaTransitionException {
+    public HashMap<String, String> getSchemaTransitionSequence(RawBinlogEvent event) throws SchemaTransitionException {
 
         if (event instanceof QueryEvent) {
             String ddl = ((QueryEvent) event).getSql().toString();

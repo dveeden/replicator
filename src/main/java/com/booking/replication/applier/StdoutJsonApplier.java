@@ -4,11 +4,11 @@ import com.booking.replication.Configuration;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_TableMap;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
 import com.google.code.or.binlog.impl.event.RotateEvent;
-import com.google.code.or.binlog.impl.event.TableMapEvent;
 import com.google.code.or.binlog.impl.event.XidEvent;
 
 import org.slf4j.Logger;
@@ -155,7 +155,7 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
-    public void applyTableMapEvent(TableMapEvent event) {
+    public void applyTableMapEvent(RawBinlogEvent_TableMap event) {
 
     }
 }

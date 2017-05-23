@@ -9,11 +9,11 @@ import com.booking.replication.applier.kafka.RowListMessage;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_TableMap;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
 import com.google.code.or.binlog.impl.event.RotateEvent;
-import com.google.code.or.binlog.impl.event.TableMapEvent;
 import com.google.code.or.binlog.impl.event.XidEvent;
 
 import com.codahale.metrics.Counter;
@@ -395,7 +395,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyTableMapEvent(TableMapEvent event) {
+    public void applyTableMapEvent(RawBinlogEvent_TableMap event) {
 
     }
 

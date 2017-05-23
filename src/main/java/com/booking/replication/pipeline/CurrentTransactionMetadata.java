@@ -1,5 +1,6 @@
 package com.booking.replication.pipeline;
 
+import com.booking.replication.binlog.RawBinlogEvent_TableMap;
 import com.booking.replication.schema.exception.TableMapException;
 import com.google.code.or.binlog.impl.event.TableMapEvent;
 import com.google.common.base.Joiner;
@@ -18,22 +19,23 @@ public class CurrentTransactionMetadata {
     private Map<Long,String> tableID2Name = new HashMap<>();
     private Map<Long, String> tableID2DBName = new HashMap<>();
 
-    private TableMapEvent firstMapEventInTransaction = null;
+    private RawBinlogEvent_TableMap firstMapEventInTransaction = null;
 
-    private final Map<String, TableMapEvent> currentTransactionTableMapEvents = new HashMap<>();
+    private final Map<String, RawBinlogEvent_TableMap> currentTransactionTableMapEvents = new HashMap<>();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CurrentTransactionMetadata.class);
 
     /**
      * Update table map cache.
      */
-    public void updateCache(TableMapEvent event) {
+    public void updateCache(RawBinlogEvent_TableMap event) {
 
         if (firstMapEventInTransaction == null) {
             firstMapEventInTransaction = event;
         }
 
-        String tableName = event.getTableName().toString();
+
+        String tableName = event.getTableName();
 
         tableID2Name.put(
                 event.getTableId(),
@@ -42,7 +44,7 @@ public class CurrentTransactionMetadata {
 
         tableID2DBName.put(
                 event.getTableId(),
-                event.getDatabaseName().toString()
+                event.getDatabaseName()
         );
 
         currentTransactionTableMapEvents.put(tableName, event);
@@ -75,16 +77,16 @@ public class CurrentTransactionMetadata {
         }
     }
 
-    public TableMapEvent getTableMapEvent(String tableName) {
+    public RawBinlogEvent_TableMap getTableMapEvent(String tableName) {
         return currentTransactionTableMapEvents.get(tableName);
     }
 
-    public TableMapEvent getFirstMapEventInTransaction() {
+    public RawBinlogEvent_TableMap getFirstMapEventInTransaction() {
         return firstMapEventInTransaction;
     }
 
 
-    public Map<String, TableMapEvent> getCurrentTransactionTableMapEvents() {
+    public Map<String, RawBinlogEvent_TableMap> getCurrentTransactionTableMapEvents() {
         return currentTransactionTableMapEvents;
     }
 

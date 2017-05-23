@@ -13,6 +13,7 @@ import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
 import com.booking.replication.binlog.RawBinlogEvent;
+import com.booking.replication.binlog.RawBinlogEvent_TableMap;
 import com.booking.replication.binlog.RawEventType;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 
@@ -366,7 +367,7 @@ public class PipelineOrchestrator extends Thread {
                     try {
                         AugmentedSchemaChangeEvent augmentedSchemaChangeEvent = activeSchemaVersion.transitionSchemaToNextVersion(
                                 eventAugmenter.getSchemaTransitionSequence(event),
-                                event.getHeader().getTimestamp()
+                                event.getTimestamp()
                         );
 
                         String currentBinlogFileName =
@@ -409,7 +410,7 @@ public class PipelineOrchestrator extends Thread {
 
             // TableMap event:
             case TABLE_MAP_EVENT:
-                String tableName = ((TableMapEvent) event).getTableName().toString();
+                String tableName = ((RawBinlogEvent_TableMap) event).getTableName();
 
                 if (tableName.equals(Constants.HEART_BEAT_TABLE)) {
                     // reset the fake microsecond counter on hearth beat event. In our case
@@ -427,19 +428,19 @@ public class PipelineOrchestrator extends Thread {
 
                 try {
 
-                    currentTransactionMetadata.updateCache((TableMapEvent) event);
+                    currentTransactionMetadata.updateCache((RawBinlogEvent_TableMap) event);
 
-                    long tableID = ((TableMapEvent) event).getTableId();
+                    long tableID = ((RawBinlogEvent_TableMap) event).getTableId();
                     String dbName = currentTransactionMetadata.getDBNameFromTableID(tableID);
-                    LOGGER.debug("processing events for { db => " + dbName + " table => " + ((TableMapEvent) event).getTableName() + " } ");
+                    LOGGER.debug("processing events for { db => " + dbName + " table => " + ((RawBinlogEvent_TableMap) event).getTableName() + " } ");
                     LOGGER.debug("fakeMicrosecondCounter at tableMap event => " + fakeMicrosecondCounter);
 
-                    applier.applyTableMapEvent((TableMapEvent) event);
+                    applier.applyTableMapEvent((RawBinlogEvent_TableMap) event);
 
                     this.pipelinePosition.updatePipelineLastMapEventPosition(
                         replicantPool.getReplicantDBActiveHost(),
                         replicantPool.getReplicantDBActiveHostServerID(),
-                        (TableMapEvent) event,
+                        (RawBinlogEvent_TableMap) event,
                         fakeMicrosecondCounter
                     );
 
@@ -467,7 +468,7 @@ public class PipelineOrchestrator extends Thread {
 
             case DELETE_ROWS_EVENT:
                 doTimestampOverride(event);
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
+                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent)     event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 deleteEventCounter.mark();
                 break;

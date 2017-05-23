@@ -15,7 +15,7 @@ public class RawBinlogEvent {
     private Event         binlogConnectorEvent;
     private long          timestampOfReceipt;
     private long          timestampOfBinlogEvent;
-    private final boolean USING_DEPRECATED_PARSER;
+    public final boolean USING_DEPRECATED_PARSER;
 
     public RawBinlogEvent(Object event) throws Exception {
 
@@ -370,5 +370,13 @@ public class RawBinlogEvent {
             default:
                 return event.getHeader().getPosition();
         }
+    }
+
+    public BinlogEventV4 getBinlogEventV4() {
+        return binlogEventV4;
+    }
+
+    public Event getBinlogConnectorEvent() {
+        return binlogConnectorEvent;
     }
 }

@@ -6,6 +6,7 @@ import com.booking.replication.applier.hbase.HBaseApplierWriter;
 import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_TableMap;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.HBaseSchemaManager;
@@ -213,7 +214,7 @@ public class HBaseApplier implements Applier {
     }
 
     @Override
-    public void applyTableMapEvent(TableMapEvent event) {
+    public void applyTableMapEvent(RawBinlogEvent_TableMap event) {
 
         String tableName = event.getTableName().toString();
 
