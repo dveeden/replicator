@@ -12,9 +12,7 @@ import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
-import com.booking.replication.binlog.RawBinlogEvent;
-import com.booking.replication.binlog.RawBinlogEvent_TableMap;
-import com.booking.replication.binlog.RawEventType;
+import com.booking.replication.binlog.*;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 
 import com.booking.replication.replicant.ReplicantPool;
@@ -454,21 +452,21 @@ public class PipelineOrchestrator extends Thread {
             // Data event:
             case UPDATE_ROWS_EVENT:
                 doTimestampOverride(event);
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
+                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEvent_Rows) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 updateEventCounter.mark();
                 break;
 
             case WRITE_ROWS_EVENT:
                 doTimestampOverride(event);
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
+                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEvent_Rows) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 insertEventCounter.mark();
                 break;
 
             case DELETE_ROWS_EVENT:
                 doTimestampOverride(event);
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent)     event, this);
+                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEvent_Rows) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 deleteEventCounter.mark();
                 break;
@@ -477,7 +475,7 @@ public class PipelineOrchestrator extends Thread {
                 // Later we may want to tag previous data events with xid_id
                 // (so we can know if events were in the same transaction).
                 doTimestampOverride(event);
-                applier.applyXidEvent((XidEvent) event);
+                applier.applyXidEvent((RawBinlogEvent_Xid) event);
                 XIDCounter.mark();
                 currentTransactionMetadata = new CurrentTransactionMetadata();
                 break;
@@ -485,12 +483,12 @@ public class PipelineOrchestrator extends Thread {
             // reset the fakeMicrosecondCounter at the beginning of the new binlog file
             case FORMAT_DESCRIPTION_EVENT:
                 fakeMicrosecondCounter = 0;
-                applier.applyFormatDescriptionEvent((FormatDescriptionEvent) event);
+                applier.applyFormatDescriptionEvent((RawBinlogEvent_FormatDescription) event);
                 break;
 
             // flush buffer at the end of binlog file
             case ROTATE_EVENT:
-                RotateEvent rotateEvent = (RotateEvent) event;
+                RawBinlogEvent_Rotate rotateEvent = (RawBinlogEvent_Rotate) event;
                 applier.applyRotateEvent(rotateEvent);
                 LOGGER.info("End of binlog file. Waiting for all tasks to finish before moving forward...");
 
@@ -501,7 +499,7 @@ public class PipelineOrchestrator extends Thread {
                         pipelinePosition.getCurrentPosition().getBinlogFilename();
 
                 String nextBinlogFileName = rotateEvent.getBinlogFileName().toString();
-                long currentBinlogPosition = rotateEvent.getBinlogPosition();
+                long currentBinlogPosition = rotateEvent.getPosition();
 
                 LOGGER.info("All rows committed for binlog file "
                         + currentBinlogFileName + ", moving to next binlog " + nextBinlogFileName);
@@ -588,7 +586,7 @@ public class PipelineOrchestrator extends Thread {
             // Query Event:
             case QUERY_EVENT:
 
-                String querySQL = ((QueryEvent) event).getSql().toString();
+                String querySQL = ((RawBinlogEvent_Query) event).getSql();
 
                 boolean isDDLTable   = queryInspector.isDDLTable(querySQL);
                 boolean isCommit     = queryInspector.isCommit(querySQL, isDDLTable);
@@ -606,7 +604,7 @@ public class PipelineOrchestrator extends Thread {
                     // There is an assumption that all tables in the transaction
                     // are from the same database. Cross database transactions
                     // are not supported.
-                    TableMapEvent firstMapEvent = currentTransactionMetadata.getFirstMapEventInTransaction();
+                    RawBinlogEvent_TableMap firstMapEvent = currentTransactionMetadata.getFirstMapEventInTransaction();
                     if (firstMapEvent != null) {
                         String currentTransactionDBName = firstMapEvent.getDatabaseName().toString();
                         if (isReplicant(currentTransactionDBName)) {
@@ -626,9 +624,9 @@ public class PipelineOrchestrator extends Thread {
                     eventIsTracked = true;
                 } else if (isDDLTable) {
                     // DDL event should always contain db name
-                    String dbName = ((QueryEvent) event).getDatabaseName().toString();
+                    String dbName = ((RawBinlogEvent_Query) event).getDatabaseName();
                     if ((dbName == null) || dbName.length() == 0) {
-                        LOGGER.warn("No Db name in Query Event. Extracted SQL: " + ((QueryEvent) event).getSql().toString());
+                        LOGGER.warn("No Db name in Query Event. Extracted SQL: " + ((RawBinlogEvent_Query) event).getSql());
                     }
                     if (isReplicant(dbName)) {
                         eventIsTracked = true;
@@ -644,7 +642,7 @@ public class PipelineOrchestrator extends Thread {
 
             // TableMap event:
             case TABLE_MAP_EVENT:
-                eventIsTracked = isReplicant(((TableMapEvent) event).getDatabaseName().toString());
+                eventIsTracked = isReplicant(((RawBinlogEvent_TableMap) event).getDatabaseName());
                 break;
 
             // Data event:

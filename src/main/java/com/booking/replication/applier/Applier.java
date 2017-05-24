@@ -2,11 +2,11 @@ package com.booking.replication.applier;
 
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_FormatDescription;
+import com.booking.replication.binlog.RawBinlogEvent_Rotate;
 import com.booking.replication.binlog.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.RawBinlogEvent_Xid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
-import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.RotateEvent;
-import com.google.code.or.binlog.impl.event.XidEvent;
 
 import java.io.IOException;
 
@@ -20,9 +20,9 @@ public interface Applier {
 
     void applyCommitQueryEvent();
 
-    void applyXidEvent(XidEvent event);
+    void applyXidEvent(RawBinlogEvent_Xid event);
 
-    void applyRotateEvent(RotateEvent event) throws ApplierException, IOException;
+    void applyRotateEvent(RawBinlogEvent_Rotate event) throws ApplierException, IOException;
 
     void applyAugmentedSchemaChangeEvent(
             AugmentedSchemaChangeEvent augmentedSchemaChangeEvent,
@@ -30,7 +30,7 @@ public interface Applier {
 
     void forceFlush() throws ApplierException, IOException;
 
-    void applyFormatDescriptionEvent(FormatDescriptionEvent event);
+    void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event);
 
     void applyTableMapEvent(RawBinlogEvent_TableMap event);
 

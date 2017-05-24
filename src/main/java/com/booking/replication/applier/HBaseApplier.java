@@ -6,7 +6,10 @@ import com.booking.replication.applier.hbase.HBaseApplierWriter;
 import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_FormatDescription;
+import com.booking.replication.binlog.RawBinlogEvent_Rotate;
 import com.booking.replication.binlog.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.RawBinlogEvent_Xid;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.HBaseSchemaManager;
@@ -15,10 +18,7 @@ import com.booking.replication.schema.TableNameMapper;
 import com.booking.replication.validation.ValidationService;
 import com.codahale.metrics.Counter;
 
-import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.RotateEvent;
 import com.google.code.or.binlog.impl.event.TableMapEvent;
-import com.google.code.or.binlog.impl.event.XidEvent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,14 +86,14 @@ public class HBaseApplier implements Applier {
     }
 
     @Override
-    public void applyXidEvent(XidEvent event) {
+    public void applyXidEvent(RawBinlogEvent_Xid event) {
         // TODO: add transactionID to storage
         // long transactionID = event.getXid();
         markCurrentTransactionForCommit();
     }
 
     @Override
-    public void applyRotateEvent(RotateEvent event) throws ApplierException, IOException {
+    public void applyRotateEvent(RawBinlogEvent_Rotate event) throws ApplierException, IOException {
         LOGGER.info("binlog rotate ["
                 + event.getBinlogFilename()
                 + "], flushing buffer of "
@@ -209,7 +209,7 @@ public class HBaseApplier implements Applier {
     }
 
     @Override
-    public void applyFormatDescriptionEvent(FormatDescriptionEvent event) {
+    public void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event) {
         LOGGER.info("Processing file " + event.getBinlogFilename());
     }
 

@@ -9,12 +9,11 @@ import com.booking.replication.applier.kafka.RowListMessage;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_FormatDescription;
+import com.booking.replication.binlog.RawBinlogEvent_Rotate;
 import com.booking.replication.binlog.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.RawBinlogEvent_Xid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
-
-import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.RotateEvent;
-import com.google.code.or.binlog.impl.event.XidEvent;
 
 import com.codahale.metrics.Counter;
 import com.codahale.metrics.Meter;
@@ -365,12 +364,12 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyXidEvent(XidEvent event) {
+    public void applyXidEvent(RawBinlogEvent_Xid event) {
 
     }
 
     @Override
-    public void applyRotateEvent(RotateEvent event) {
+    public void applyRotateEvent(RawBinlogEvent_Rotate event) {
 
     }
 
@@ -390,7 +389,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyFormatDescriptionEvent(FormatDescriptionEvent event) {
+    public void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event) {
 
     }
 

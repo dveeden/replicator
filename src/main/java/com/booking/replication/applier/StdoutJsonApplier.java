@@ -4,12 +4,11 @@ import com.booking.replication.Configuration;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.binlog.RawBinlogEvent_FormatDescription;
+import com.booking.replication.binlog.RawBinlogEvent_Rotate;
 import com.booking.replication.binlog.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.RawBinlogEvent_Xid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
-
-import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.RotateEvent;
-import com.google.code.or.binlog.impl.event.XidEvent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +34,7 @@ public class StdoutJsonApplier implements Applier  {
     public StdoutJsonApplier(Configuration configuration) {}
 
     @Override
-    public void applyXidEvent(XidEvent event) {
+    public void applyXidEvent(RawBinlogEvent_Xid event) {
         if (VERBOSE) {
             for (String table : stats.keySet()) {
                 LOGGER.info("XID Event, current stats: { table => " + table + ", rows => " + stats.get(table));
@@ -144,13 +143,13 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
-    public void applyRotateEvent(RotateEvent event) {
+    public void applyRotateEvent(RawBinlogEvent_Rotate event) {
         LOGGER.info("binlog rotate: " + event.getBinlogFilename());
         LOGGER.info("STDOUTApplier totalRowsCounter => " + totalRowsCounter);
     }
 
     @Override
-    public void applyFormatDescriptionEvent(FormatDescriptionEvent event) {
+    public void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event) {
 
     }
 

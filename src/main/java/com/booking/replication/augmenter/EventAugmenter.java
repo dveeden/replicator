@@ -4,6 +4,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
 import com.booking.replication.binlog.RawBinlogEvent;
+import com.booking.replication.binlog.RawBinlogEvent_Rows;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.column.ColumnSchema;
@@ -12,7 +13,6 @@ import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.schema.table.TableSchemaVersion;
 
-import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.StatusVariable;
 import com.google.code.or.binlog.impl.event.*;
 import com.google.code.or.binlog.impl.variable.status.QTimeZoneCode;
@@ -124,7 +124,7 @@ public class EventAugmenter {
      * @param  event               AbstractRowEvent
      * @return augmentedDataEvent  AugmentedRow
      */
-    public AugmentedRowsEvent mapDataEventToSchema(AbstractRowEvent event, PipelineOrchestrator caller) throws TableMapException {
+    public AugmentedRowsEvent mapDataEventToSchema(RawBinlogEvent_Rows event, PipelineOrchestrator caller) throws TableMapException {
 
         AugmentedRowsEvent au;
 
