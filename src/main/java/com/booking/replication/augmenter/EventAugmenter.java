@@ -4,7 +4,9 @@ import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
 import com.booking.replication.binlog.RawBinlogEvent;
+import com.booking.replication.binlog.RawBinlogEvent_Query;
 import com.booking.replication.binlog.RawBinlogEvent_Rows;
+import com.booking.replication.binlog.RawEventType;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.column.ColumnSchema;
@@ -68,34 +70,31 @@ public class EventAugmenter {
 
     public HashMap<String, String> getSchemaTransitionSequence(RawBinlogEvent event) throws SchemaTransitionException {
 
-        if (event instanceof QueryEvent) {
-            String ddl = ((QueryEvent) event).getSql().toString();
+        if (event.isQuery()) {
+
+            String ddl = ((RawBinlogEvent_Query) event).getSql();
 
             // query
             HashMap<String, String> sqlCommands = new HashMap<>();
-            sqlCommands.put("databaseName", ((QueryEvent) event).getDatabaseName().toString());
+            sqlCommands.put("databaseName", ((RawBinlogEvent_Query) event).getDatabaseName());
             sqlCommands.put("originalDDL", ddl);
 
             // since active schema has a postfix, we need to make sure that queires that
             // specify schema explictly are rewriten so they work properly on active schema
-            sqlCommands.put("ddl", rewriteActiveSchemaName(ddl, ((QueryEvent) event).getDatabaseName().toString()));
-
-            // status variables
-            for (StatusVariable av : ((QueryEvent) event).getStatusVariables()) {
+            sqlCommands.put("ddl", rewriteActiveSchemaName(ddl, ((RawBinlogEvent_Query) event).getDatabaseName().toString()));
 
                 // handle timezone overrides during schema changes
-                if (av instanceof QTimeZoneCode) {
-                    QTimeZoneCode tzCode = (QTimeZoneCode) av;
+                if (((RawBinlogEvent_Query) event).hasTimezoneOverride()) {
 
-                    LOGGER.info("This DDL query has specified timezone override: " + tzCode.getTimeZone());
-                    String timezone = tzCode.getTimeZone().toString();
-                    String timezoneSetCommand = "SET @@session.time_zone='" + timezone + "'";
-                    String timezoneSetBackToSystem = "SET @@session.time_zone='SYSTEM'";
 
+
+                    HashMap sqlPrePost = ((RawBinlogEvent_Query) event).getTimezoneOverrideCommands();
+
+                    // TODO: put sqlPrePost to sqlCommands
                     sqlCommands.put("timezonePre", timezoneSetCommand);
                     sqlCommands.put("timezonePost", timezoneSetBackToSystem);
                 }
-            }
+
             return sqlCommands;
         } else {
             throw new SchemaTransitionException("Not a valid query event!");
