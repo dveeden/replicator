@@ -46,16 +46,21 @@ public class RawBinlogEvent_Query extends RawBinlogEvent {
                     return false;
                 }
             }
+            return false;
         }
         else {
-            return ((EventHeaderV4) getBinlogConnectorEvent().getHeader()).getFlags();
+            int flags = ((EventHeaderV4) getBinlogConnectorEvent().getHeader()).getFlags();
+            // TODO: FIX !!!! implement logic here; not sure how flags corresponds to status variables from open replicator
+            return false;
         }
     }
 
     public HashMap<String,String> getTimezoneOverrideCommands() {
+
+        HashMap<String,String> sqlCommands = new HashMap<>();
+
         if (USING_DEPRECATED_PARSER) {
 
-            HashMap<String,String> sqlCommands = new HashMap<>();
 
             for (StatusVariable av : ((QueryEvent) this.getBinlogEventV4()).getStatusVariables()) {
 
@@ -72,7 +77,8 @@ public class RawBinlogEvent_Query extends RawBinlogEvent {
             return sqlCommands;
         }
         else {
-            // TODO:
+            // TODO: FIX !!!! implement logic here; not sure how flags corresponds to status variables from open replicator
+            return sqlCommands;
         }
     }
 }

@@ -3,10 +3,7 @@ package com.booking.replication.augmenter;
 import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
-import com.booking.replication.binlog.RawBinlogEvent;
-import com.booking.replication.binlog.RawBinlogEvent_Query;
-import com.booking.replication.binlog.RawBinlogEvent_Rows;
-import com.booking.replication.binlog.RawEventType;
+import com.booking.replication.binlog.*;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.column.ColumnSchema;
@@ -15,9 +12,7 @@ import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.schema.table.TableSchemaVersion;
 
-import com.google.code.or.binlog.StatusVariable;
 import com.google.code.or.binlog.impl.event.*;
-import com.google.code.or.binlog.impl.variable.status.QTimeZoneCode;
 import com.google.code.or.common.glossary.Column;
 import com.google.code.or.common.glossary.Pair;
 import com.google.code.or.common.glossary.Row;
@@ -79,23 +74,28 @@ public class EventAugmenter {
             sqlCommands.put("databaseName", ((RawBinlogEvent_Query) event).getDatabaseName());
             sqlCommands.put("originalDDL", ddl);
 
-            // since active schema has a postfix, we need to make sure that queires that
-            // specify schema explictly are rewriten so they work properly on active schema
-            sqlCommands.put("ddl", rewriteActiveSchemaName(ddl, ((RawBinlogEvent_Query) event).getDatabaseName().toString()));
+            sqlCommands.put(
+                    "ddl",
+                    rewriteActiveSchemaName( // since active schema has a postfix, we need to make sure that queires that
+                            ddl,             // specify schema explicitly are rewritten so they work properly on active schema
+                            ((RawBinlogEvent_Query) event).getDatabaseName().toString()
+                    ));
 
                 // handle timezone overrides during schema changes
                 if (((RawBinlogEvent_Query) event).hasTimezoneOverride()) {
 
+                    HashMap<String,String> timezoneOverrideCommands = ((RawBinlogEvent_Query) event).getTimezoneOverrideCommands();
 
-
-                    HashMap sqlPrePost = ((RawBinlogEvent_Query) event).getTimezoneOverrideCommands();
-
-                    // TODO: put sqlPrePost to sqlCommands
-                    sqlCommands.put("timezonePre", timezoneSetCommand);
-                    sqlCommands.put("timezonePost", timezoneSetBackToSystem);
+                    if (timezoneOverrideCommands.containsKey("timezonePre")) {
+                        sqlCommands.put("timezonePre", timezoneOverrideCommands.get("timezonePre"));
+                    }
+                    if (timezoneOverrideCommands.containsKey("timezonePost")) {
+                        sqlCommands.put("timezonePost",  timezoneOverrideCommands.get("timezonePost"));
+                    }
                 }
 
             return sqlCommands;
+
         } else {
             throw new SchemaTransitionException("Not a valid query event!");
         }
@@ -127,34 +127,21 @@ public class EventAugmenter {
 
         AugmentedRowsEvent au;
 
-        switch (event.getHeader().getEventType()) {
-
-            case MySQLConstants.UPDATE_ROWS_EVENT:
-                UpdateRowsEvent updateRowsEvent = ((UpdateRowsEvent) event);
-                au = augmentUpdateRowsEvent(updateRowsEvent, caller);
+        switch (event.getEventType()) {
+            case UPDATE_ROWS_EVENT:
+                RawBinlogEvent_Update updateRowsEvent = ((RawBinlogEvent_Update) event);
+                au = augmentUpdateRowsEventV2(updateRowsEvent, caller);
                 break;
-            case MySQLConstants.UPDATE_ROWS_EVENT_V2:
-                UpdateRowsEventV2 updateRowsEventV2 = ((UpdateRowsEventV2) event);
-                au = augmentUpdateRowsEventV2(updateRowsEventV2, caller);
+            case WRITE_ROWS_EVENT:
+                RawBinlogEvent_Write writeRowsEvent = ((RawBinlogEvent_Write) event);
+                au = augmentWriteRowsEventV2(writeRowsEvent, caller);
                 break;
-            case MySQLConstants.WRITE_ROWS_EVENT:
-                WriteRowsEvent writeRowsEvent = ((WriteRowsEvent) event);
-                au = augmentWriteRowsEvent(writeRowsEvent, caller);
-                break;
-            case MySQLConstants.WRITE_ROWS_EVENT_V2:
-                WriteRowsEventV2 writeRowsEventV2 = ((WriteRowsEventV2) event);
-                au = augmentWriteRowsEventV2(writeRowsEventV2, caller);
-                break;
-            case MySQLConstants.DELETE_ROWS_EVENT:
-                DeleteRowsEvent deleteRowsEvent = ((DeleteRowsEvent) event);
-                au = augmentDeleteRowsEvent(deleteRowsEvent, caller);
-                break;
-            case MySQLConstants.DELETE_ROWS_EVENT_V2:
-                DeleteRowsEventV2 deleteRowsEventV2 = ((DeleteRowsEventV2) event);
-                au = augmentDeleteRowsEventV2(deleteRowsEventV2, caller);
+            case DELETE_ROWS_EVENT:
+                RawBinlogEvent_Delete deleteRowsEvent = ((RawBinlogEvent_Delete) event);
+                au = augmentDeleteRowsEventV2(deleteRowsEvent, caller);
                 break;
             default:
-                throw new TableMapException("RBR event type expected! Received type: " + event.getHeader().getEventType(), event);
+                throw new TableMapException("RBR event type expected! Received type: " + event.getEventType().toString(), event);
         }
 
         if (au == null) {
@@ -164,7 +151,7 @@ public class EventAugmenter {
         return au;
     }
 
-    private AugmentedRowsEvent augmentWriteRowsEvent(WriteRowsEvent writeRowsEvent, PipelineOrchestrator caller) throws TableMapException {
+    private AugmentedRowsEvent augmentWriteRowsEvent(RawBinlogEvent_Write writeRowsEvent, PipelineOrchestrator caller) throws TableMapException {
 
         // table name
         String tableName =  caller.currentTransactionMetadata.getTableNameFromID(writeRowsEvent.getTableId());
@@ -227,7 +214,7 @@ public class EventAugmenter {
     // TODO: refactor these functions since they are mostly the same. Also move to a different class.
     // Same as for V1 write event. There is some extra data in V2, but not sure if we can use it.
     private AugmentedRowsEvent augmentWriteRowsEventV2(
-            WriteRowsEventV2 writeRowsEvent,
+            RawBinlogEvent_Write writeRowsEvent,
             PipelineOrchestrator caller) throws TableMapException {
 
         // table name
@@ -349,7 +336,7 @@ public class EventAugmenter {
 
     // For now this is the same as for V1 event.
     private AugmentedRowsEvent augmentDeleteRowsEventV2(
-            DeleteRowsEventV2 deleteRowsEvent,
+            RawBinlogEvent_Delete deleteRowsEvent,
             PipelineOrchestrator caller) throws TableMapException {
         // table name
         String tableName = caller.currentTransactionMetadata.getTableNameFromID(deleteRowsEvent.getTableId());
@@ -476,7 +463,7 @@ public class EventAugmenter {
     }
 
     // For now this is the same as V1. Not sure if the extra info in V2 can be of use to us.
-    private AugmentedRowsEvent augmentUpdateRowsEventV2(UpdateRowsEventV2 upEvent, PipelineOrchestrator caller) throws TableMapException {
+    private AugmentedRowsEvent augmentUpdateRowsEventV2(RawBinlogEvent_Update upEvent, PipelineOrchestrator caller) throws TableMapException {
 
         // table name
         String tableName = caller.currentTransactionMetadata.getTableNameFromID(upEvent.getTableId());
