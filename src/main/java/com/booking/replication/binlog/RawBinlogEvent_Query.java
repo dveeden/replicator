@@ -49,8 +49,7 @@ public class RawBinlogEvent_Query extends RawBinlogEvent {
             return false;
         }
         else {
-            int flags = ((EventHeaderV4) getBinlogConnectorEvent().getHeader()).getFlags();
-            // TODO: FIX !!!! implement logic here; not sure how flags corresponds to status variables from open replicator
+            // TODO: bin log connector currently does not support status variables
             return false;
         }
     }
@@ -77,7 +76,7 @@ public class RawBinlogEvent_Query extends RawBinlogEvent {
             return sqlCommands;
         }
         else {
-            // TODO: FIX !!!! implement logic here; not sure how flags corresponds to status variables from open replicator
+            // TODO: bin log connector currently does not support status variables
             return sqlCommands;
         }
     }
