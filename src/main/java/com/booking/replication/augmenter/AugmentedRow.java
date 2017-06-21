@@ -100,7 +100,7 @@ public class AugmentedRow {
      * @param columnName    Name of the column to update
      * @param valueBefore   Value before the update
      * @param valueAfter    Value after the update
-     * @param columnType    Column type
+     * @param columnType    ParsedColumn type
      * @throws InvalidParameterException    Invalid parameter
      * @throws TableMapException            Invalid table
      */
@@ -131,7 +131,7 @@ public class AugmentedRow {
      * Add column data.
      * @param columnName Name of the column to insert
      * @param value       Value to insert
-     * @param columnType  Column type
+     * @param columnType  ParsedColumn type
      */
     public void addColumnDataForInsert(
             String columnName,

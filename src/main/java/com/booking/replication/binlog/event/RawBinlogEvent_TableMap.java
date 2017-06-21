@@ -1,4 +1,4 @@
-package com.booking.replication.binlog;
+package com.booking.replication.binlog.event;
 
 import com.github.shyiko.mysql.binlog.event.TableMapEventData;
 import com.google.code.or.binlog.impl.event.TableMapEvent;

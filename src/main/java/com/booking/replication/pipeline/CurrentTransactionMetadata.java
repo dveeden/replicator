@@ -1,8 +1,7 @@
 package com.booking.replication.pipeline;
 
-import com.booking.replication.binlog.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
 import com.booking.replication.schema.exception.TableMapException;
-import com.google.code.or.binlog.impl.event.TableMapEvent;
 import com.google.common.base.Joiner;
 
 import org.slf4j.Logger;

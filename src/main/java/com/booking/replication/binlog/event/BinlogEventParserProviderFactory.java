@@ -1,14 +1,10 @@
-package com.booking.replication.binlog;
+package com.booking.replication.binlog.event;
 
 import com.booking.replication.Configuration;
-import com.booking.replication.binlog.BinlogEventParserProviderCode;
+import com.booking.replication.binlog.event.BinlogEventParserProviderCode;
 import com.booking.replication.pipeline.PipelinePosition;
 import com.google.code.or.OpenReplicator;
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
-import com.google.code.or.binlog.BinlogEventListener;
-import com.google.code.or.binlog.BinlogEventV4;
-
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by bosko on 5/13/17.

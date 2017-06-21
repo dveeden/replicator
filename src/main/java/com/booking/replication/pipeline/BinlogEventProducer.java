@@ -6,9 +6,9 @@ import com.booking.replication.Configuration;
 import com.booking.replication.Constants;
 import com.booking.replication.Metrics;
 
-import com.booking.replication.binlog.BinlogEventParserProviderCode;
-import com.booking.replication.binlog.BinlogEventParserProviderFactory;
-import com.booking.replication.binlog.RawBinlogEvent;
+import com.booking.replication.binlog.event.BinlogEventParserProviderCode;
+import com.booking.replication.binlog.event.BinlogEventParserProviderFactory;
+import com.booking.replication.binlog.event.RawBinlogEvent;
 import com.booking.replication.replicant.ReplicantPool;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
@@ -29,7 +29,6 @@ import java.util.Random;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
-import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
 
 /**
  * Simple wrapper for Open Replicator. Writes events to blocking queue.

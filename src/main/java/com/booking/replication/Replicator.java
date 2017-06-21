@@ -1,7 +1,7 @@
 package com.booking.replication;
 
 import com.booking.replication.applier.*;
-import com.booking.replication.binlog.RawBinlogEvent;
+import com.booking.replication.binlog.event.RawBinlogEvent;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.monitor.*;
 import com.booking.replication.pipeline.BinlogEventProducer;

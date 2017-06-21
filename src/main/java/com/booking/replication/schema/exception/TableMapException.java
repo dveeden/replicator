@@ -1,7 +1,6 @@
 package com.booking.replication.schema.exception;
 
-import com.booking.replication.binlog.RawBinlogEvent;
-import com.google.code.or.binlog.BinlogEventV4;
+import com.booking.replication.binlog.event.RawBinlogEvent;
 
 /**
  * Created by bosko on 11/10/15.

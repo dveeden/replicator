@@ -2,10 +2,10 @@ package com.booking.replication.applier;
 
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.binlog.RawBinlogEvent_FormatDescription;
-import com.booking.replication.binlog.RawBinlogEvent_Rotate;
-import com.booking.replication.binlog.RawBinlogEvent_TableMap;
-import com.booking.replication.binlog.RawBinlogEvent_Xid;
+import com.booking.replication.binlog.event.RawBinlogEvent_FormatDescription;
+import com.booking.replication.binlog.event.RawBinlogEvent_Rotate;
+import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.event.RawBinlogEvent_Xid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import java.io.IOException;

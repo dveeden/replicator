@@ -1,16 +1,7 @@
 package com.booking.replication.pipeline;
 
-import com.booking.replication.binlog.RawBinlogEvent;
-import com.booking.replication.binlog.RawBinlogEvent_TableMap;
-import com.google.code.or.binlog.BinlogEventV4;
-import com.google.code.or.binlog.impl.event.AbstractRowEvent;
-import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
-import com.google.code.or.binlog.impl.event.QueryEvent;
-import com.google.code.or.binlog.impl.event.RotateEvent;
-import com.google.code.or.binlog.impl.event.StopEvent;
-import com.google.code.or.binlog.impl.event.TableMapEvent;
-import com.google.code.or.binlog.impl.event.XidEvent;
-import com.google.code.or.common.util.MySQLConstants;
+import com.booking.replication.binlog.event.RawBinlogEvent;
+import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -12,7 +12,7 @@ import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
-import com.booking.replication.binlog.*;
+import com.booking.replication.binlog.event.*;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 
 import com.booking.replication.replicant.ReplicantPool;
@@ -21,7 +21,6 @@ import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.sql.QueryInspector;
 import com.booking.replication.sql.exception.QueryInspectorException;
-import com.google.code.or.binlog.impl.event.*;
 import com.google.common.base.Joiner;
 
 import com.codahale.metrics.Gauge;

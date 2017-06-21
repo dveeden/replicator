@@ -1,4 +1,4 @@
-package com.booking.replication.binlog;
+package com.booking.replication.binlog.event;
 
 import com.github.shyiko.mysql.binlog.event.*;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -10,12 +10,12 @@ import com.google.code.or.common.util.MySQLConstants;
  */
 public class RawBinlogEvent {
 
-    private final int     BINLOG_PARSER_PROVIDER;
-    private BinlogEventV4 binlogEventV4;
-    private Event         binlogConnectorEvent;
-    private long          timestampOfReceipt;
-    private long          timestampOfBinlogEvent;
-    public final boolean USING_DEPRECATED_PARSER;
+    protected final int     BINLOG_PARSER_PROVIDER;
+    protected BinlogEventV4 binlogEventV4;
+    protected Event         binlogConnectorEvent;
+    protected long          timestampOfReceipt;
+    protected long          timestampOfBinlogEvent;
+    protected final boolean USING_DEPRECATED_PARSER;
 
     public void setBinlogFilename(String binlogFilename) {
         this.binlogFilename = binlogFilename;

@@ -9,10 +9,10 @@ import com.booking.replication.applier.kafka.RowListMessage;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.binlog.RawBinlogEvent_FormatDescription;
-import com.booking.replication.binlog.RawBinlogEvent_Rotate;
-import com.booking.replication.binlog.RawBinlogEvent_TableMap;
-import com.booking.replication.binlog.RawBinlogEvent_Xid;
+import com.booking.replication.binlog.event.RawBinlogEvent_FormatDescription;
+import com.booking.replication.binlog.event.RawBinlogEvent_Rotate;
+import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.event.RawBinlogEvent_Xid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import com.codahale.metrics.Counter;
@@ -266,7 +266,7 @@ public class KafkaApplier implements Applier {
 
                 totalRowsCounter++;
 
-                // Row binlog position id
+                // ParsedRow binlog position id
                 rowBinlogPositionID = row.getRowBinlogPositionID();
                 if (rowBinlogPositionID.compareTo(rowLastPositionID) <= 0) {
                     throw new RuntimeException(

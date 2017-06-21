@@ -1,14 +1,11 @@
-package com.booking.replication.binlog;
+package com.booking.replication.binlog.event;
 
-import com.github.shyiko.mysql.binlog.event.EventHeaderV4;
 import com.github.shyiko.mysql.binlog.event.QueryEventData;
 import com.google.code.or.binlog.StatusVariable;
 import com.google.code.or.binlog.impl.event.QueryEvent;
 import com.google.code.or.binlog.impl.variable.status.QTimeZoneCode;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 /**
  * Created by bosko on 5/22/17.
