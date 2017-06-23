@@ -25,8 +25,8 @@ import com.booking.replication.binlog.common.Cell;
  */
 
 /**
- * This class was taken from OpenReplicator.
- * The only change made is rename from BitColumn to BitCell
+ * Copied from: https://github.com/whitesock/open-replicator/blob/master/src/main/java/com/google/code/or/common/glossary/column/BitColumn.java
+ *              and renaed BitColumn to BitCell
  * */
 public final class BitCell implements Cell {
     //

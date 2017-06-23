@@ -5,6 +5,7 @@ import com.booking.replication.binlog.common.ExtractedColumnBytes;
 import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.common.cell.AnyColumn;
 import com.booking.replication.binlog.common.cell.BitCell;
+import com.booking.replication.binlog.common.cell.BlobCell;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
 import com.google.code.or.common.glossary.Column;
@@ -214,7 +215,7 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
                            ((BitSet) cell).length(),
                            ((BitSet) cell).toByteArray()
                         );
-                        
+
                     }
                     if(cell instanceof java.util.Date){
 
@@ -236,7 +237,8 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
 
                     }
                     if(cell instanceof byte[]){
-
+                        // BLOB || GEOMETRY || JSON
+                        deserializedCell = new BlobCell((byte[]) cell);
                     }
                 }
             }

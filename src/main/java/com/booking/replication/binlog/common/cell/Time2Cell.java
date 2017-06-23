@@ -3,11 +3,18 @@ package com.booking.replication.binlog.common.cell;
 import com.booking.replication.binlog.common.Cell;
 
 /**
- * Created by bosko on 6/21/17.
+ * Extracted from: https://github.com/whitesock/open-replicator/blob/master/src/main/java/com/google/code/or/common/glossary/column/Time2Column.java
  */
 public class Time2Cell implements Cell {
+
+    private final java.sql.Time value;
+
+    private Time2Cell(java.sql.Time value) {
+        this.value = value;
+    }
+
     @Override
-    public Object getValue() {
-        return null;
+    public java.sql.Time getValue() {
+        return value;
     }
 }

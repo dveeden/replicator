@@ -3,11 +3,22 @@ package com.booking.replication.binlog.common.cell;
 import com.booking.replication.binlog.common.Cell;
 
 /**
- * Created by bosko on 6/21/17.
+ * Extracted from: https://github.com/whitesock/open-replicator/blob/master/src/main/java/com/google/code/or/common/glossary/column/FloatColumn.java
  */
 public class FloatCell implements Cell {
+
+    private final float value;
+
+    /**
+     *
+     */
+    private FloatCell(float value) {
+        this.value = value;
+    }
+
+
     @Override
-    public Object getValue() {
+    public Float getValue() {
         return null;
     }
 }

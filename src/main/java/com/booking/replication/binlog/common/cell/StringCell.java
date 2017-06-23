@@ -21,8 +21,10 @@ import com.booking.replication.binlog.common.Cell;
 /**
  *
  * @author Jingqi Xu
- *
- * Later renamed from StringColum to StringCell
+ */
+/**
+ * Copied from: https://github.com/whitesock/open-replicator/blob/master/src/main/java/com/google/code/or/common/glossary/column/StringColumn.java
+ *              and renamed StringColum to StringCell
  *
  */
 public final class StringCell implements Cell {
