@@ -3,7 +3,7 @@ package com.booking.replication.augmenter;
 import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
-import com.booking.replication.binlog.common.ExtractedRow;
+import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.event.*;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.ActiveSchemaVersion;
@@ -16,7 +16,6 @@ import com.booking.replication.schema.table.TableSchemaVersion;
 import com.google.code.or.binlog.impl.event.*;
 import com.google.code.or.common.glossary.Column;
 import com.google.code.or.common.glossary.Pair;
-import com.google.code.or.common.glossary.Row;
 
 import com.codahale.metrics.Counter;
 import org.slf4j.Logger;
@@ -173,7 +172,7 @@ public class EventAugmenter {
         // In write event there is only a List<ParsedRow> from getRows. No before after naturally.
 
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-        for (ExtractedRow row : writeRowsEvent.getRows()) {
+        for (Row row : writeRowsEvent.getRows()) {
 
             String evType = "INSERT";
             rowBinlogEventOrdinal++;
@@ -196,7 +195,7 @@ public class EventAugmenter {
                 String columnName = tableSchemaVersion.getColumnIndexToNameMap().get(columnIndex);
 
                 // but here index goes from 0..
-                Column columnValue = row.getExtractedColumns().get(columnIndex - 1);
+                Column columnValue = row.getRowCells().get(columnIndex - 1);
 
                 // We need schema for proper type casting
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
@@ -237,7 +236,7 @@ public class EventAugmenter {
         augEventGroup.setMysqlTableName(tableName);
 
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-        for (ExtractedRow row : writeRowsEvent.getExtractedRows()) {
+        for (Row row : writeRowsEvent.getExtractedRows()) {
 
             String evType = "INSERT";
             rowBinlogEventOrdinal++;
@@ -258,7 +257,7 @@ public class EventAugmenter {
                 String columnName = tableSchemaVersion.getColumnIndexToNameMap().get(columnIndex);
 
                 // but here index goes from 0..
-                Column columnValue = row.getExtractedColumns().get(columnIndex - 1);
+                Column columnValue = row.getRowCells().get(columnIndex - 1);
 
                 // We need schema for proper type casting
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
@@ -298,7 +297,7 @@ public class EventAugmenter {
         int numberOfColumns = deleteRowsEvent.getColumnCount().intValue();
 
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-        for (Row row : deleteRowsEvent.getRows()) {
+        for (com.google.code.or.common.glossary.Row row : deleteRowsEvent.getRows()) {
 
             String evType =  "DELETE";
             rowBinlogEventOrdinal++;
@@ -358,7 +357,7 @@ public class EventAugmenter {
         int numberOfColumns = deleteRowsEvent.getColumnCount().intValue();
 
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-        for (Row row : deleteRowsEvent.getRows()) {
+        for (com.google.code.or.common.glossary.Row row : deleteRowsEvent.getRows()) {
 
             String evType = "DELETE";
             rowBinlogEventOrdinal++;
@@ -420,7 +419,7 @@ public class EventAugmenter {
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
 
         // rowPair is pair <rowBeforeChange, rowAfterChange>
-        for (Pair<Row> rowPair : upEvent.getRows()) {
+        for (Pair<com.google.code.or.common.glossary.Row> rowPair : upEvent.getRows()) {
 
             String evType = "UPDATE";
             rowBinlogEventOrdinal++;
@@ -487,7 +486,7 @@ public class EventAugmenter {
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
 
         // rowPair is pair <rowBeforeChange, rowAfterChange>
-        for (Pair<Row> rowPair : upEvent.getRows()) {
+        for (Pair<com.google.code.or.common.glossary.Row> rowPair : upEvent.getRows()) {
 
             String evType = "UPDATE";
             rowBinlogEventOrdinal++;

@@ -1,10 +1,9 @@
 package com.booking.replication.binlog.event;
 
-import com.booking.replication.binlog.common.ExtractedColumn;
+import com.booking.replication.binlog.common.Cell;
 import com.booking.replication.binlog.common.ExtractedColumnBytes;
-import com.booking.replication.binlog.common.ExtractedRow;
-import com.booking.replication.binlog.common.column.AnyColumn;
-import com.booking.replication.schema.exception.TableMapException;
+import com.booking.replication.binlog.common.Row;
+import com.booking.replication.binlog.common.cell.AnyColumn;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
 import com.google.code.or.common.glossary.Column;
@@ -12,6 +11,7 @@ import com.google.code.or.common.glossary.column.*;
 import com.google.code.or.common.util.MySQLConstants;
 
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -22,7 +22,7 @@ import java.util.List;
  */
 public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
 
-    List<ExtractedRow> extractedRows;
+    List<Row> extractedRows;
 
     public RawBinlogEvent_Write(Object event) throws Exception {
         super(event);
@@ -48,19 +48,19 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
         }
     }
 
-    public List<ExtractedRow> getExtractedRows() {
+    public List<Row> getExtractedRows() {
         return extractedRows;
     }
 
-    private List<ExtractedRow> extractRowsFromEvent() throws Exception {
+    private List<Row> extractRowsFromEvent() throws Exception {
 
         if (this.USING_DEPRECATED_PARSER) {
 
-            List<ExtractedRow> extractedRows = new ArrayList();
+            List<Row> extractedRows = new ArrayList();
 
             for (com.google.code.or.common.glossary.Row orRow : ((WriteRowsEvent) binlogEventV4).getRows()) {
 
-                List<ExtractedColumn> extractedColumns = new ArrayList<>();
+                List<Cell> rowCells = new ArrayList<>();
 
                 for (Column column: orRow.getColumns()) {
 
@@ -91,10 +91,20 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
                         columnBytes = buffer.array();
                     }
                     else  if (column instanceof  EnumColumn) {
-                        columnType = MySQLConstants.TYPE_ENUM;
+                        columnType = MySQLConstants.TYPE_SET;
+                        Integer value = ((EnumColumn)column).getValue();
+                        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
+                        buffer.putLong(value);
+                        columnBytes = buffer.array();
                     }
                     else if (column instanceof DecimalColumn) {
                         columnType = MySQLConstants.TYPE_DECIMAL;
+                        BigDecimal value =  ((DecimalColumn)column).getValue();
+                        int precision =  ((DecimalColumn)column).getPrecision();
+                        int scale =  ((DecimalColumn)column).getScale();
+
+
+                        // TODO: return BigDecimal wraped in type class
                     }
                     else if (column instanceof DoubleColumn) {
                         columnType = MySQLConstants.TYPE_DOUBLE;
@@ -143,23 +153,81 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
                     } else {
                         throw new Exception("Unknown MySQL type in the Open Replicator event" + column.getClass() + " Object = " + column);
                     }
-                    ExtractedColumn extractedColumn = new ExtractedColumnBytes(columnType, columnBytes);
+                    Cell rowCell = new ExtractedColumnBytes(columnType, columnBytes);
 
-                    extractedColumns.add(extractedColumn);
+                    rowCells.add(rowCell);
 
                 }
 
-                ExtractedRow extractedRow = new ExtractedRow(extractedColumns);
+                Row extractedRow = new Row(rowCells);
                 extractedRows.add(extractedRow);
             }
             return extractedRows;
         }
         else {
-            List<ExtractedRow> rows = new ArrayList();
-            for (Serializable[] bcRow: ((WriteRowsEventData) binlogConnectorEvent.getData()).getRows()) {
-                com.github.shyiko.mysql.binlog.event.deserialization.AbstractRowsEventDataDeserializer
 
-                        bcRow
+            List<Row> rows = new ArrayList();
+
+            for (Serializable[] bcRow: ((WriteRowsEventData) binlogConnectorEvent.getData()).getRows()) {
+
+                for (int columnIndex = 0; columnIndex < bcRow.length; columnIndex++) {
+
+                    Serializable cell = bcRow[columnIndex];
+
+                    // Cell can have one of the following types:
+                    //
+                    //  Integer
+                    //  Long
+                    //  Float
+                    //  Double
+                    //  java.util.BitSet
+                    //  java.util.Date
+                    //  java.math.BigDecimal
+                    //  java.sql.Timestamp
+                    //  java.sql.Date
+                    //  java.sql.Time
+                    //  String
+                    //  byte[]
+                    //
+                    // More details at: https://github.com/shyiko/mysql-binlog-connector-java/blob/3709c9668ffc732e053e0f93ca3a3610789b152c/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java
+                    if(cell instanceof Integer){
+
+                    }
+                    if(cell instanceof Long){
+
+                    }
+                    if(cell instanceof Float){
+
+                    }
+                    if(cell instanceof Double){
+
+                    }
+                    if(cell instanceof java.util.BitSet){
+
+                    }
+                    if(cell instanceof java.util.Date){
+
+                    }
+                    if(cell instanceof java.math.BigDecimal){
+                        BigDecimal bd = (BigDecimal)cell;
+                        // TODO: create BigDecimal class
+                    }
+                    if(cell instanceof java.sql.Timestamp){
+
+                    }
+                    if(cell instanceof java.sql.Date){
+
+                    }
+                    if(cell instanceof java.sql.Time){
+
+                    }
+                    if(cell instanceof String){
+
+                    }
+                    if(cell instanceof byte[]){
+
+                    }
+                }
             }
             return rows;
         }

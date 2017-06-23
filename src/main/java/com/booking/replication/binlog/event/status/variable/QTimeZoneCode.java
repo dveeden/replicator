@@ -4,7 +4,7 @@ import com.github.shyiko.mysql.binlog.io.ByteArrayInputStream;
 import com.google.code.or.common.util.MySQLConstants;
 
 import com.google.code.or.common.util.ToStringBuilder;
-import com.booking.replication.binlog.common.column.StringColumn;
+import com.booking.replication.binlog.common.cell.StringCell;
 
 import java.io.IOException;
 
@@ -17,12 +17,12 @@ public class QTimeZoneCode
     public static final int TYPE = MySQLConstants.Q_TIME_ZONE_CODE;
 
     //
-    private final StringColumn timeZone;
+    private final StringCell timeZone;
 
     /**
      *
      */
-    public QTimeZoneCode(StringColumn timeZone) {
+    public QTimeZoneCode(StringCell timeZone) {
         super(TYPE);
         this.timeZone = timeZone;
     }
@@ -39,7 +39,7 @@ public class QTimeZoneCode
     /**
      *
      */
-    public StringColumn getTimeZone() {
+    public StringCell getTimeZone() {
         return timeZone;
     }
 
@@ -47,7 +47,7 @@ public class QTimeZoneCode
         final int length = inputStream.readInteger(1);  // Length
 
         byte[] timeZoneBytes = inputStream.read(length);
-        return new QTimeZoneCode(StringColumn.valueOf(timeZoneBytes));
+        return new QTimeZoneCode(StringCell.valueOf(timeZoneBytes));
     }
 
 }

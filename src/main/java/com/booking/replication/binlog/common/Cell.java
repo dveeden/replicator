@@ -1,4 +1,4 @@
-package com.booking.replication.binlog.common.column;
+package com.booking.replication.binlog.common;
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -16,45 +16,19 @@ package com.booking.replication.binlog.common.column;
  * limitations under the License.
  */
 
-import com.booking.replication.binlog.common.ExtractedColumn;
+import java.io.Serializable;
+
+/**
+ *  Taken from OR: https://github.com/whitesock/open-replicator/blob/489a489cc3c354ff99d17c053240ef6581b85963/src/main/java/com/google/code/or/common/glossary/Column.java
+ *  and renamed Column to Cell
+ */
 
 /**
  *
  * @author Jingqi Xu
  */
-public final class StringColumn implements ExtractedColumn {
-    //
-    private static final long serialVersionUID = 1009717372407166422L;
+public interface Cell extends Serializable {
 
-    //
-    private final byte[] value;
+    Object getValue();
 
-    /**
-     *
-     */
-    private StringColumn(byte[] value) {
-        this.value = value;
-    }
-
-    /**
-     *
-     */
-    @Override
-    public String toString() {
-        return new String(this.value);
-    }
-
-    /**
-     *
-     */
-    public byte[] getValue() {
-        return this.value;
-    }
-
-    /**
-     *
-     */
-    public static final StringColumn valueOf(byte[] value) {
-        return new StringColumn(value);
-    }
 }
