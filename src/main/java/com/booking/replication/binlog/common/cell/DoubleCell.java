@@ -9,10 +9,7 @@ public class DoubleCell implements Cell {
 
     private final double value;
 
-    /**
-     *
-     */
-    private DoubleCell(double value) {
+    public DoubleCell(double value) {
         this.value = value;
     }
 

@@ -9,15 +9,12 @@ public class EnumCell implements Cell {
 
     private final int value;
 
-    /**
-     *
-     */
-    private EnumCell(int value) {
+    public EnumCell(int value) {
         this.value = value;
     }
 
     @Override
     public Integer getValue() {
-        return null;
+        return value;
     }
 }

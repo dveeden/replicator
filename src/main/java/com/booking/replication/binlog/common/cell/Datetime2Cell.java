@@ -11,10 +11,7 @@ public class Datetime2Cell implements Cell {
 
     private final java.util.Date value;
 
-    /**
-     *
-     */
-    private Datetime2Cell(java.util.Date value) {
+    public Datetime2Cell(java.util.Date value) {
         this.value = value;
     }
 

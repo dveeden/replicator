@@ -13,10 +13,7 @@ public class SetCell implements Cell {
 
     private final long value;
 
-    /**
-     *
-     */
-    private SetCell(long value) {
+    public SetCell(long value) {
         this.value = value;
     }
 

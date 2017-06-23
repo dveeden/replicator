@@ -1,16 +1,15 @@
 package com.booking.replication.binlog.event;
 
 import com.booking.replication.binlog.common.Cell;
-import com.booking.replication.binlog.common.ExtractedColumnBytes;
 import com.booking.replication.binlog.common.Row;
-import com.booking.replication.binlog.common.cell.AnyColumn;
-import com.booking.replication.binlog.common.cell.BitCell;
-import com.booking.replication.binlog.common.cell.BlobCell;
+import com.booking.replication.binlog.common.cell.*;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
 import com.google.code.or.common.glossary.Column;
 import com.google.code.or.common.glossary.column.*;
 import com.google.code.or.common.util.MySQLConstants;
+import com.google.code.or.io.ExceedLimitException;
+import org.apache.commons.lang.ObjectUtils;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -56,132 +55,109 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
 
     private List<Row> extractRowsFromEvent() throws Exception {
 
-        if (this.USING_DEPRECATED_PARSER) {
+        List<Row> rows = new ArrayList();
 
-            List<Row> extractedRows = new ArrayList();
+        if (this.USING_DEPRECATED_PARSER) {
 
             for (com.google.code.or.common.glossary.Row orRow : ((WriteRowsEvent) binlogEventV4).getRows()) {
 
-                List<Cell> rowCells = new ArrayList<>();
+                List<Cell> cells = new ArrayList<>();
 
                 for (Column column: orRow.getColumns()) {
 
                     Cell cell;
 
                     if (column instanceof BitColumn) {
-
-                        cell =  BitCell.valueOf(
-                                ((BitColumn)column).getLength(),
-                                ((BitColumn)column).getValue()
-                        );
-
+                        cell =  BitCell.valueOf(((BitColumn)column).getLength(), ((BitColumn)column).getValue());
                     }
                     else if (column instanceof BlobColumn) {
-                        columnType = MySQLConstants.TYPE_BLOB;
-                        columnBytes = ((BlobColumn)column).getValue();
+                        cell = new BlobCell((byte[]) ((BlobColumn)column).getValue());
                     }
                     else if (column instanceof StringColumn) {
-                        columnType = MySQLConstants.TYPE_STRING;
-                        columnBytes = ((StringColumn)column).getValue();
-                    }
-                    else if (column instanceof NullColumn) {
-                        columnType = MySQLConstants.TYPE_NULL;
-                        columnBytes = null;
-                    }
-                    else if (column instanceof SetColumn) {
-                        columnType = MySQLConstants.TYPE_SET;
-                        long value = ((SetColumn)column).getValue();
-                        ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
-                        buffer.putLong(value);
-                        columnBytes = buffer.array();
-                    }
-                    else  if (column instanceof  EnumColumn) {
-                        columnType = MySQLConstants.TYPE_SET;
-                        Integer value = ((EnumColumn)column).getValue();
-                        ByteBuffer buffer = ByteBuffer.allocate(Integer.BYTES);
-                        buffer.putLong(value);
-                        columnBytes = buffer.array();
+                        cell = StringCell.valueOf((byte[])((StringColumn)column).getValue());
                     }
                     else if (column instanceof DecimalColumn) {
-                        columnType = MySQLConstants.TYPE_DECIMAL;
-                        BigDecimal value =  ((DecimalColumn)column).getValue();
-                        int precision =  ((DecimalColumn)column).getPrecision();
-                        int scale =  ((DecimalColumn)column).getScale();
-
-
-                        // TODO: return BigDecimal wraped in type class
+                        BigDecimal value = ((DecimalColumn)column).getValue();
+                        int precision = ((DecimalColumn)column).getPrecision();
+                        int scale = ((DecimalColumn)column).getScale();
+                        cell = new DecimalCell(value,precision,scale);
+                    }
+                    else if (column instanceof NullColumn) {
+                        cell = NullCell.valueOf(((NullColumn)column).getType());
+                    }
+                    else if (column instanceof SetColumn) {
+                        cell = new SetCell(((SetColumn)column).getValue());
+                    }
+                    else  if (column instanceof  EnumColumn) {
+                        cell = new EnumCell(((EnumColumn)column).getValue());
                     }
                     else if (column instanceof DoubleColumn) {
-                        columnType = MySQLConstants.TYPE_DOUBLE;
+                        cell = new DoubleCell(((DoubleColumn)column).getValue());
                     }
                     else if (column instanceof FloatColumn) {
-                        columnType = MySQLConstants.TYPE_FLOAT;
+                        cell = new FloatCell(((FloatColumn)column).getValue());
                     }
                     else if (column instanceof TinyColumn) {
-                        columnType = MySQLConstants.TYPE_TINY;
+                        cell = TinyCell.valueOf(((TinyColumn)column).getValue());
                     }
                     else if (column instanceof  ShortColumn) {
-                        columnType = MySQLConstants.TYPE_SHORT;
+                        cell = ShortCell.valueOf(((ShortColumn)column).getValue());
                     }
                     else if (column instanceof Int24Column) {
-                        columnType = MySQLConstants.TYPE_INT24;
+                        cell = Int24Cell.valueOf(((Int24Column)column).getValue());
                     }
                     else if (column instanceof LongColumn) {
-                        columnType = MySQLConstants.TYPE_LONG;
+                        cell = LongCell.valueOf(((LongColumn)column).getValue());
                     }
                     else if (column instanceof LongLongColumn) {
-                        columnType = MySQLConstants.TYPE_LONGLONG;
+                        cell = LongLongCell.valueOf(((LongLongColumn)column).getValue());
                     }
                     else if (column instanceof YearColumn) {
-                        columnType = MySQLConstants.TYPE_YEAR;
+                        cell = YearCell.valueOf(((YearColumn)column).getValue());
                     }
                     else if (column instanceof DateColumn) {
-                        columnType = MySQLConstants.TYPE_DATE;
+                        cell = new DateCell(((DateColumn)column).getValue());
                     }
                     else if (column instanceof DatetimeColumn) {
-                        columnType = MySQLConstants.TYPE_DATETIME;
+                        cell = new DatetimeCell(((DatetimeColumn)column).getValue());
                     }
                     else if (column instanceof Datetime2Column) {
-                        columnType = MySQLConstants.TYPE_DATETIME2;
+                        cell = new Datetime2Cell(((Datetime2Column)column).getValue());
                     }
                     else if (column instanceof TimeColumn) {
-                        columnType = MySQLConstants.TYPE_TIME;
+                        cell = new TimeCell(((TimeColumn)column).getValue());
                     }
                     else if (column instanceof  Time2Column) {
-                        columnType = MySQLConstants.TYPE_TIME2;
+                        cell = new Time2Cell(((Time2Column)column).getValue());
                     }
                     else if (column instanceof TimestampColumn) {
-                        columnType = MySQLConstants.TYPE_TIMESTAMP;
+                        cell = new TimestampCell(((TimestampColumn)column).getValue());
                     }
                     else if (column instanceof Timestamp2Column) {
-                        columnType = MySQLConstants.TYPE_TIMESTAMP2;
+                        cell = new Timestamp2Cell(((Timestamp2Column)column).getValue());
                     } else {
                         throw new Exception("Unknown MySQL type in the Open Replicator event" + column.getClass() + " Object = " + column);
                     }
-                    Cell rowCell = new ExtractedColumnBytes(columnType, columnBytes);
 
-                    rowCells.add(rowCell);
-
+                    cells.add(cell);
                 }
 
-                Row extractedRow = new Row(rowCells);
-                extractedRows.add(extractedRow);
+                Row row = new Row(cells);
+                rows.add(row);
             }
-            return extractedRows;
+            return rows;
         }
         else {
 
-            List<Row> rows = new ArrayList();
-
             for (Serializable[] bcRow: ((WriteRowsEventData) binlogConnectorEvent.getData()).getRows()) {
+
+                List<Cell> cells = new ArrayList<>();
 
                 for (int columnIndex = 0; columnIndex < bcRow.length; columnIndex++) {
 
-                    Serializable cell = bcRow[columnIndex];
+                    Cell cell;
 
-                    Cell deserializedCell;
-
-                    // Cell can have one of the following types:
+                    // Columns can have one of the following types:
                     //
                     //  Integer
                     //  Long
@@ -197,50 +173,138 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
                     //  byte[]
                     //
                     // More details at: https://github.com/shyiko/mysql-binlog-connector-java/blob/3709c9668ffc732e053e0f93ca3a3610789b152c/src/main/java/com/github/shyiko/mysql/binlog/event/deserialization/AbstractRowsEventDataDeserializer.java
-                    if(cell instanceof Integer){
 
+                    Serializable column = bcRow[columnIndex];
+
+
+                    if(column instanceof Integer){
+                        //  This can correspond to these MySQL types
+                        //
+                        //      {@link ColumnType#TINY}: Integer
+                        //      {@link ColumnType#SHORT}: Integer
+                        //      {@link ColumnType#LONG}: Integer
+                        //      {@link ColumnType#INT24}: Integer
+                        //      {@link ColumnType#YEAR}: Integer
+                        //      {@link ColumnType#ENUM}: Integer
+
+                        Integer cval = (Integer)column;
+
+                        if (cval >= -128 && cval <=127){
+                            // tiny int
+                            cell = TinyCell.valueOf(cval);
+                        }
+                        else if (cval >= -32768	&& cval <= 32767) {
+                            // small int
+                            cell = ShortCell.valueOf(cval);
+                        }
+                        else if (cval >=-8388608 && cval <=	8388607) {
+                            // medium int
+                            cell = Int24Cell.valueOf(cval);
+                        }
+                        else if (cval >= -2147483648 && cval <= 2147483647) {
+                            // int
+                            cell = LongCell.valueOf(cval);
+                        }
+                        else {
+                            throw new ExceedLimitException("Impossible case for:" + column);
+                        }
                     }
-                    if(cell instanceof Long){
+                    else if(column instanceof Long){
+                        // This can correspond to these MySQL types
+                        //
+                        //      {@link ColumnType#SET}: Long
+                        //      {@link ColumnType#LONGLONG}: Long
+                        //
+                        // We can not determine that based on value allone so we store
+                        // it as LongLongCell, but later during schema matching we can check
+                        // for this type is it mysql long or mysql set.
+                        //
+                        // Note: mysql-binlog-connector uses the type info from TableMapEvent
+                        //       to determine how to deserialize event, but deserialization
+                        //       will only give us the the final value, not the type of the
+                        //       column.
 
+                        Long cval = (Long)column;
+                        cell = LongLongCell.valueOf(cval);
                     }
-                    if(cell instanceof Float){
-
+                    else if(column instanceof Float){
+                        // This can correspond to these MySQL types
+                        //      {@link ColumnType#FLOAT}: Float
+                        cell = new FloatCell(((Float)column));
                     }
-                    if(cell instanceof Double){
-
+                    else if(column instanceof Double){
+                        // This can correspond to these MySQL types
+                        //      {@link ColumnType#DOUBLE}: Double
+                        cell = new DoubleCell((Double)column);
                     }
-                    if(cell instanceof java.util.BitSet){
-
-                        deserializedCell =  BitCell.valueOf(
-                           ((BitSet) cell).length(),
-                           ((BitSet) cell).toByteArray()
+                    else if(column instanceof java.util.BitSet){
+                        // This can correspond to these MySQL types
+                        //      {@link ColumnType#BIT}: java.util.BitSet
+                        cell =  BitCell.valueOf(
+                           ((BitSet) column).length(),
+                           ((BitSet) column).toByteArray()
                         );
+                    }
+                    else if(column instanceof java.util.Date){
+                        // This can correspond to these MySQL types
+                        //      {@link ColumnType#DATETIME}: java.util.Date
+                        //      {@link ColumnType#DATETIME_V2}: java.util.Date
+                        //
+                        // DATETIME_V2 is the storage format with support for fractional part.
+                        // For now we treat them both as DATETIME_V2.
+                        // TODO: add a check if there is fractional seconds part to distinguish between DATETIME_V2 and DATETIME
+                        cell = new Datetime2Cell((java.util.Date)column);
+                    }
+                    else if(column instanceof java.math.BigDecimal){
+                        // This can correspond to these MySQL types
+                        //      {@link ColumnType#NEWDECIMAL}:
+                        BigDecimal bd = (java.math.BigDecimal)column;
+                        int precision = bd.precision();
+                        int scale = bd.scale();
+                        cell = new DecimalCell(bd,precision,scale);
+                    }
+                    else if(column instanceof java.sql.Timestamp){
+                        // This can correspond to these MySQL types
+                        //      {@link ColumnType#TIMESTAMP}: java.sql.Timestamp
+                        //      {@link ColumnType#TIMESTAMP_V2}: java.sql.Timestamp
+
 
                     }
-                    if(cell instanceof java.util.Date){
+                    else if(column instanceof java.sql.Date){
+                        // This can correspond to these MySQL types
 
                     }
-                    if(cell instanceof java.math.BigDecimal){
-                        BigDecimal bd = (BigDecimal)cell;
-                        // TODO: create BigDecimal class
-                    }
-                    if(cell instanceof java.sql.Timestamp){
+                    else if(column instanceof java.sql.Time){
+                        // This can correspond to these MySQL types
 
                     }
-                    if(cell instanceof java.sql.Date){
+                    else if(column instanceof String){
+                        // This can correspond to these MySQL types
 
                     }
-                    if(cell instanceof java.sql.Time){
+                    else if(column instanceof byte[]){
 
-                    }
-                    if(cell instanceof String){
+                        // This can correspond to these MySQL types
+                        //
+                        //      {@link ColumnType#BLOB}: byte[]
+                        //      {@link ColumnType#GEOMETRY}: byte[]
+                        //
+                        // and
+                        //      ColumnType#JSON: byte[]
+                        //
+                        // We treat all cases as Blobs (no explicit support for
+                        // JSON and Geometry)
+                        // TODO: add support for JSON and Geometry types
+                        cell = new BlobCell((byte[]) column);
 
+                    } else {
+                        throw new Exception("Unknown MySQL type in the BinlogConnector event" + column.getClass() + " Object = " + column);
                     }
-                    if(cell instanceof byte[]){
-                        // BLOB || GEOMETRY || JSON
-                        deserializedCell = new BlobCell((byte[]) cell);
-                    }
+
+                    cells.add(cell);
                 }
+                Row row = new Row(cells);
+                rows.add(row);
             }
             return rows;
         }

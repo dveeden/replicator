@@ -9,7 +9,7 @@ public class Time2Cell implements Cell {
 
     private final java.sql.Time value;
 
-    private Time2Cell(java.sql.Time value) {
+    public Time2Cell(java.sql.Time value) {
         this.value = value;
     }
 

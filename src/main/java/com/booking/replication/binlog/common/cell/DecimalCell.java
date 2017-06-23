@@ -15,7 +15,7 @@ public class DecimalCell implements Cell {
     /**
      *
      */
-    private DecimalCell(BigDecimal value, int precision, int scale) {
+    public DecimalCell(BigDecimal value, int precision, int scale) {
         this.value = value;
         this.scale = scale;
         this.precision = precision;

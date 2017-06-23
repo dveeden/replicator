@@ -9,16 +9,13 @@ public class FloatCell implements Cell {
 
     private final float value;
 
-    /**
-     *
-     */
-    private FloatCell(float value) {
+    public FloatCell(float value) {
         this.value = value;
     }
 
 
     @Override
     public Float getValue() {
-        return null;
+        return value;
     }
 }
