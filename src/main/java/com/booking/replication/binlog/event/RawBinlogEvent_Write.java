@@ -4,6 +4,7 @@ import com.booking.replication.binlog.common.Cell;
 import com.booking.replication.binlog.common.ExtractedColumnBytes;
 import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.common.cell.AnyColumn;
+import com.booking.replication.binlog.common.cell.BitCell;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
 import com.google.code.or.common.glossary.Column;
@@ -64,12 +65,15 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
 
                 for (Column column: orRow.getColumns()) {
 
-                    byte[] columnBytes;
-                    int columnType;
+                    Cell cell;
 
                     if (column instanceof BitColumn) {
-                        columnType = MySQLConstants.TYPE_BIT;
-                        columnBytes = ((BitColumn)column).getValue();
+
+                        cell =  BitCell.valueOf(
+                                ((BitColumn)column).getLength(),
+                                ((BitColumn)column).getValue()
+                        );
+
                     }
                     else if (column instanceof BlobColumn) {
                         columnType = MySQLConstants.TYPE_BLOB;
@@ -174,6 +178,8 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
 
                     Serializable cell = bcRow[columnIndex];
 
+                    Cell deserializedCell;
+
                     // Cell can have one of the following types:
                     //
                     //  Integer
@@ -204,6 +210,11 @@ public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
                     }
                     if(cell instanceof java.util.BitSet){
 
+                        deserializedCell =  BitCell.valueOf(
+                           ((BitSet) cell).length(),
+                           ((BitSet) cell).toByteArray()
+                        );
+                        
                     }
                     if(cell instanceof java.util.Date){
 
