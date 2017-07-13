@@ -8,7 +8,6 @@ import com.google.common.base.Joiner;
 import org.apache.hadoop.hbase.client.Put;
 import org.apache.hadoop.hbase.util.Bytes;
 
-import org.apache.hadoop.hbase.util.Triple;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -131,7 +130,7 @@ public class HBaseApplierMutationGenerator {
 
                 // No need to process columns on DELETE. Only write delete marker.
 
-                Long columnTimestamp = row.getEventV4Header().getTimestamp();
+                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
                 String columnName = "row_status";
                 String columnValue = "D";
                 put.addColumn(
@@ -146,7 +145,7 @@ public class HBaseApplierMutationGenerator {
 
                 // Only write values that have changed
 
-                Long columnTimestamp = row.getEventV4Header().getTimestamp();
+                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
                 String columnValue;
 
                 for (String columnName : row.getEventColumns().keySet()) {
@@ -185,7 +184,7 @@ public class HBaseApplierMutationGenerator {
             }
             case "INSERT": {
 
-                Long columnTimestamp = row.getEventV4Header().getTimestamp();
+                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
                 String columnValue;
 
                 for (String columnName : row.getEventColumns().keySet()) {
@@ -227,7 +226,7 @@ public class HBaseApplierMutationGenerator {
 
         // String  replicantSchema   = configuration.getReplicantSchemaName().toLowerCase();
         String  mySQLTableName    = row.getTableName();
-        Long    timestampMicroSec = row.getEventV4Header().getTimestamp();
+        Long    timestampMicroSec = row.getRawBinlogEventHeader().getTimestamp();
         boolean isInitialSnapshot = configuration.isInitialSnapshotMode();
 
         String deltaTableName = TableNameMapper.getCurrentDeltaTableName(
@@ -244,7 +243,7 @@ public class HBaseApplierMutationGenerator {
 
                 // For delta tables in case of DELETE, just write a delete marker
 
-                Long columnTimestamp = row.getEventV4Header().getTimestamp();
+                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
                 String columnName = "row_status";
                 String columnValue = "D";
                 put.addColumn(
@@ -259,7 +258,7 @@ public class HBaseApplierMutationGenerator {
 
                 // for delta tables write the latest version of the entire row
 
-                Long columnTimestamp = row.getEventV4Header().getTimestamp();
+                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
 
                 for (String columnName : row.getEventColumns().keySet()) {
                     put.addColumn(
@@ -280,7 +279,7 @@ public class HBaseApplierMutationGenerator {
             }
             case "INSERT": {
 
-                Long columnTimestamp = row.getEventV4Header().getTimestamp();
+                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
                 String columnValue;
 
                 for (String columnName : row.getEventColumns().keySet()) {

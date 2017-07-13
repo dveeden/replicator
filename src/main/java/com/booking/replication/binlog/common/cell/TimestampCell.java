@@ -5,16 +5,23 @@ import com.booking.replication.binlog.common.Cell;
 /**
  * Extracted from: https://github.com/whitesock/open-replicator/blob/master/src/main/java/com/google/code/or/common/glossary/column/TimestampColumn.java
  */
-public class TimestampCell implements Cell {
 
-    private final java.sql.Timestamp value;
+public final class TimestampCell implements Cell {
 
-    public TimestampCell(java.sql.Timestamp value) {
-        this.value = value;
+    private java.sql.Timestamp value;
+
+    /**
+     *
+     */
+    @Override
+    public String toString() {
+        return String.valueOf(this.value);
     }
 
-    @Override
-    public Object getValue() {
-        return value;
+    /**
+     *
+     */
+    public java.sql.Timestamp getValue() {
+        return this.value;
     }
 }

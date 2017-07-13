@@ -1,5 +1,6 @@
 package com.booking.replication.augmenter;
 
+import com.booking.replication.binlog.event.RawBinlogEvent_Header;
 import com.booking.replication.schema.column.ColumnSchema;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.schema.table.TableSchemaVersion;
@@ -28,10 +29,6 @@ import java.util.*;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties({"tableSchemaVersion"})
 public class AugmentedRow {
-
-    @JsonDeserialize(as = BinlogEventV4HeaderImpl.class)
-    @JsonIgnoreProperties({"headerLength", "position"})
-    private BinlogEventV4Header eventV4Header;
 
     @JsonDeserialize(as = TableSchemaVersion.class)
     private TableSchemaVersion tableSchemaVersion;
@@ -67,7 +64,6 @@ public class AugmentedRow {
      * @param tableName           Table name of the row
      * @param tableSchemaVersion         TableSchemaVersion object
      * @param eventType           Event type identifier (INSERT/UPDATE/DELETE)
-     * @param binlogEventV4Header BinlogEventV4Header object
      *
      * @throws InvalidParameterException    Invalid parameter
      * @throws TableMapException            Invalid table
@@ -78,17 +74,14 @@ public class AugmentedRow {
             String              tableName,
             TableSchemaVersion tableSchemaVersion,
             String              eventType,
-            BinlogEventV4Header binlogEventV4Header)  throws TableMapException {
+            Long eventPosition)  throws TableMapException {
 
         this.rowBinlogEventOrdinal = rowOrdinal;
         this.binlogFileName = binlogFileName;
         this.tableName = tableName;
         this.eventType = eventType;
-        this.eventV4Header = binlogEventV4Header;
 
         initTableSchema(tableSchemaVersion);
-
-        Long eventPosition = eventV4Header.getPosition();
 
         rowBinlogPositionID = String.format("%s:%020d:%020d", this.binlogFileName, eventPosition, this.rowBinlogEventOrdinal);
         rowUUID = UUID.randomUUID().toString();;
@@ -202,10 +195,6 @@ public class AugmentedRow {
 
     public String getEventType() {
         return eventType;
-    }
-
-    public BinlogEventV4Header getEventV4Header() {
-        return eventV4Header;
     }
 
     public String getRowBinlogPositionID() {

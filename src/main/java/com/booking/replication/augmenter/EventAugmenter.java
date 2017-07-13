@@ -3,6 +3,7 @@ package com.booking.replication.augmenter;
 import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
+import com.booking.replication.binlog.common.Cell;
 import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.event.*;
 import com.booking.replication.pipeline.PipelineOrchestrator;
@@ -172,7 +173,7 @@ public class EventAugmenter {
         // In write event there is only a List<ParsedRow> from getRows. No before after naturally.
 
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-        for (Row row : writeRowsEvent.getRows()) {
+        for (Row row : writeRowsEvent.getExtractedRows()) {
 
             String evType = "INSERT";
             rowBinlogEventOrdinal++;
@@ -200,7 +201,7 @@ public class EventAugmenter {
                 // We need schema for proper type casting
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
 
-                String value = Converter.orTypeToString(columnValue, columnSchema);
+                String value = Converter.cellValueToString(columnValue, columnSchema);
 
                 augEvent.addColumnDataForInsert(columnName, value, columnSchema.getColumnType());
             }
@@ -263,7 +264,7 @@ public class EventAugmenter {
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
 
                 // type cast
-                String value = Converter.orTypeToString(columnValue, columnSchema);
+                String value = Converter.cellValueToString(columnValue, columnSchema);
 
                 augEvent.addColumnDataForInsert(columnName, value, columnSchema.getColumnType());
             }
@@ -276,7 +277,7 @@ public class EventAugmenter {
         return augEventGroup;
     }
 
-    private AugmentedRowsEvent augmentDeleteRowsEvent(DeleteRowsEvent deleteRowsEvent, PipelineOrchestrator pipeline)
+    private AugmentedRowsEvent augmentDeleteRowsEvent(RawBinlogEvent_Delete deleteRowsEvent, PipelineOrchestrator pipeline)
             throws TableMapException {
 
         // table name
@@ -294,10 +295,10 @@ public class EventAugmenter {
         AugmentedRowsEvent augEventGroup = new AugmentedRowsEvent(deleteRowsEvent);
         augEventGroup.setMysqlTableName(tableName);
 
-        int numberOfColumns = deleteRowsEvent.getColumnCount().intValue();
+        int numberOfColumns = deleteRowsEvent.getColumnCount();
 
         long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-        for (com.google.code.or.common.glossary.Row row : deleteRowsEvent.getRows()) {
+        for (Row row : deleteRowsEvent.getExtractedRows()) {
 
             String evType =  "DELETE";
             rowBinlogEventOrdinal++;
@@ -307,7 +308,7 @@ public class EventAugmenter {
                     tableName,
                     tableSchemaVersion,
                     evType,
-                    deleteRowsEvent.getHeader()
+                    deleteRowsEvent.getPosition()
             );
 
             //column index counting starts with 1
@@ -316,12 +317,12 @@ public class EventAugmenter {
                 String columnName = tableSchemaVersion.getColumnIndexToNameMap().get(columnIndex);
 
                 // but here index goes from 0..
-                Column columnValue = row.getColumns().get(columnIndex - 1);
+                Cell cellValue = row.getRowCells().get(columnIndex - 1);
 
                 // We need schema for proper type casting
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
 
-                String value = Converter.orTypeToString(columnValue, columnSchema);
+                String value = Converter.cellValueToString(cellValue, columnSchema);
 
                 augEvent.addColumnDataForInsert(columnName, value, columnSchema.getColumnType());
             }
@@ -382,7 +383,7 @@ public class EventAugmenter {
                 // We need schema for proper type casting
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
 
-                String value = Converter.orTypeToString(columnValue, columnSchema);
+                String value = Converter.cellValueToString(columnValue, columnSchema);
 
                 // TODO: delete has same content as insert, but add a differently named method for clarity
                 augEvent.addColumnDataForInsert(columnName, value, columnSchema.getColumnType());
@@ -446,8 +447,8 @@ public class EventAugmenter {
                 // is the same for both before and after states
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
 
-                String valueBefore = Converter.orTypeToString(columnValueBefore, columnSchema);
-                String valueAfter  = Converter.orTypeToString(columnValueAfter, columnSchema);
+                String valueBefore = Converter.cellValueToString(columnValueBefore, columnSchema);
+                String valueAfter  = Converter.cellValueToString(columnValueAfter, columnSchema);
 
                 String columnType  = columnSchema.getColumnType();
 
@@ -518,8 +519,8 @@ public class EventAugmenter {
                 ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
 
                 try {
-                    String valueBefore = Converter.orTypeToString(columnValueBefore, columnSchema);
-                    String valueAfter  = Converter.orTypeToString(columnValueAfter, columnSchema);
+                    String valueBefore = Converter.cellValueToString(columnValueBefore, columnSchema);
+                    String valueAfter  = Converter.cellValueToString(columnValueAfter, columnSchema);
                     String columnType  = columnSchema.getColumnType();
 
                     augEvent.addColumnDataForUpdate(columnName, valueBefore, valueAfter, columnType);

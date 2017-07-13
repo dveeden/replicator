@@ -14,7 +14,7 @@ public class Timestamp2Cell implements Cell {
     }
 
     @Override
-    public Object getValue() {
+    public java.sql.Timestamp getValue() {
         return value;
     }
 }

@@ -1,6 +1,6 @@
 package com.booking.replication.augmenter;
 
-import com.booking.replication.binlog.event.RawBinlogEvent_Write;
+import com.booking.replication.binlog.event.RawBinlogEvent_Rows;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.List;
  */
 public class AugmentedRowsEvent {
 
-    AugmentedRowsEvent(RawBinlogEvent_Write ev) {
+    AugmentedRowsEvent(RawBinlogEvent_Rows ev) {
         binlogFileName = ev.getBinlogFilename();
     }
 

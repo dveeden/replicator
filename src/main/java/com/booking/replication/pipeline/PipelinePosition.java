@@ -170,14 +170,14 @@ public class PipelinePosition {
                     host,
                     serverID,
                     event.getBinlogFilename(),
-                    event.getHeader().getPosition(),
+                    event.getPosition(),
                     fakeMicrosecondCounter
             ));
         } else {
             this.getLastMapEventPosition().setHost(host);
             this.getLastMapEventPosition().setServerID(serverID);
-            this.getLastMapEventPosition().setBinlogFilename(getEventBinlogFileName(event));
-            this.getLastMapEventPosition().setBinlogPosition(getEventBinlogPosition(event));
+            this.getLastMapEventPosition().setBinlogFilename(event.getBinlogFilename());
+            this.getLastMapEventPosition().setBinlogPosition(event.getPosition());
             this.getLastMapEventPosition().setFakeMicrosecondsCounter(fakeMicrosecondCounter);
         }
     }
@@ -190,12 +190,11 @@ public class PipelinePosition {
     ) {
         this.getCurrentPosition().setHost(host);
         this.getCurrentPosition().setServerID(serverID);
-        // TODO: change file name only on ROTATE event and for other events just read the
-        //       cached value
-        this.getCurrentPosition().setBinlogFilename(getEventBinlogFileName(event));
-        this.getCurrentPosition().setBinlogPosition(getEventBinlogPosition(event));
+        // binlog file name is updated on all events and not just on rotate event due to support for
+        // mysql failover, so before the rotate event is reached the binlog file name can change in
+        // case of mysql failover
+        this.getCurrentPosition().setBinlogFilename(event.getBinlogFilename());
+        this.getCurrentPosition().setBinlogPosition(event.getPosition());
         this.getCurrentPosition().setFakeMicrosecondsCounter(fakeMicrosecondCounter);
     }
-
-
 }
