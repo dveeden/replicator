@@ -3,6 +3,7 @@ package com.booking.replication.sql;
 import com.booking.replication.Configuration;
 import com.booking.replication.sql.exception.QueryInspectorException;
 
+import com.google.code.or.binlog.impl.event.QueryEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,5 +115,24 @@ public class QueryInspector {
         } else {
             throw new QueryInspectorException("Invalid PseudoGTID query. Could not extract PseudoGTID from: " + querySQL);
         }
+    }
+
+    public String getQueryEventType(QueryEvent event) {
+        String querySQL = event.getSql().toString();
+        boolean isDDLTable = isDDLTable(querySQL);
+        boolean isDDLView = isDDLView(querySQL);
+
+        if (isCommit(querySQL, isDDLTable)) {
+            return "COMMIT";
+        } else if (isBegin(querySQL, isDDLTable)) {
+            return "BEGIN";
+        } else if (isPseudoGTID(querySQL)) {
+            return "PSEUDOGTID";
+        } else if (isDDLTable) {
+            return "DDLTABLE";
+        } else if (isDDLView) {
+            return "DDLVIEW";
+        }
+        return "UNKNOWN";
     }
 }

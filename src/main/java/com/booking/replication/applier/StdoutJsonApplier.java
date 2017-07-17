@@ -117,6 +117,13 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
+    public void applyBeginQueryEvent(QueryEvent event) {
+        if (VERBOSE) {
+            LOGGER.info("BEGIN");
+        }
+    }
+
+    @Override
     public void applyCommitQueryEvent(QueryEvent event) {
         if (VERBOSE) {
             LOGGER.info("COMMIT");

@@ -80,6 +80,9 @@ public class HBaseApplier implements Applier {
                 configuration.getHBaseQuorum(), configuration.isDryRunMode());
     }
 
+    @Override
+    public void applyBeginQueryEvent(QueryEvent event) {
+    }
 
     @Override
     public void applyCommitQueryEvent(QueryEvent event) {

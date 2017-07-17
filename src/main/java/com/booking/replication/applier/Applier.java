@@ -20,6 +20,8 @@ public interface Applier {
     void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedSingleRowEvent, PipelineOrchestrator caller)
             throws ApplierException, IOException;
 
+    void applyBeginQueryEvent(QueryEvent event);
+
     void applyCommitQueryEvent(QueryEvent event);
 
     void applyXidEvent(XidEvent event);

@@ -8,11 +8,10 @@ import com.booking.replication.Coordinator;
 import com.booking.replication.Metrics;
 import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.HBaseApplier;
-import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
-import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
+import com.booking.replication.pipeline.event.handler.*;
 import com.booking.replication.queues.ReplicatorQueues;
 import com.booking.replication.replicant.ReplicantPool;
 import com.booking.replication.schema.ActiveSchemaVersion;
@@ -20,6 +19,7 @@ import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.sql.QueryInspector;
 import com.booking.replication.sql.exception.QueryInspectorException;
+import com.google.code.or.OpenReplicator;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.*;
 import com.google.code.or.common.util.MySQLConstants;
@@ -35,6 +35,7 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.sql.SQLException;
 import java.util.HashMap;
+import java.util.Queue;
 import java.util.concurrent.TimeUnit;
 
 
@@ -51,15 +52,16 @@ import java.util.concurrent.TimeUnit;
  * </p>
  */
 public class PipelineOrchestrator extends Thread {
-
-    public  final  Configuration                   configuration;
-    private final  ReplicantPool                   replicantPool;
-    private final  Applier                         applier;
-    private final  ReplicatorQueues                queues;
-    private final  QueryInspector                  queryInspector;
     private static EventAugmenter                  eventAugmenter;
     private static ActiveSchemaVersion             activeSchemaVersion;
     private static LastCommittedPositionCheckpoint lastVerifiedPseudoGTIDCheckPoint;
+
+    public  final Configuration                   configuration;
+    private final ReplicantPool                   replicantPool;
+    private final Applier                         applier;
+    private final ReplicatorQueues                queues;
+    private final QueryInspector                  queryInspector;
+    private final EventHandler                    eventHandler;
 
     public CurrentTransactionMetadata currentTransactionMetadata;
 
@@ -103,25 +105,10 @@ public class PipelineOrchestrator extends Thread {
      * second. We want to know what was their order. That is the
      * main purpose of this counter.</p>
      */
-    private static long fakeMicrosecondCounter = 0L;
-    private static long previousTimestamp = 0L;
+    private long fakeMicrosecondCounter = 0L;
+    private long previousTimestamp = 0L;
 
-    public void requestReplicatorShutdown() {
-        replicatorShutdownRequested = true;
-    }
-
-    public boolean isReplicatorShutdownRequested() {
-        return replicatorShutdownRequested;
-    }
-
-    public static void setFakeMicrosecondCounter(Long fakeMicrosecondCounter) {
-        LOGGER.info(String.format(
-                "Setting fake microsecond counter to: %s (was: %s)",
-                fakeMicrosecondCounter,
-                PipelineOrchestrator.fakeMicrosecondCounter)
-        );
-        PipelineOrchestrator.fakeMicrosecondCounter = fakeMicrosecondCounter;
-    }
+    private Long replDelay = 0L;
 
     public PipelineOrchestrator(
             ReplicatorQueues repQueues,
@@ -129,6 +116,7 @@ public class PipelineOrchestrator extends Thread {
             Configuration repcfg,
             Applier applier,
             ReplicantPool replicantPool,
+            OpenReplicator openReplicator,
             long fakeMicrosecondCounter) throws SQLException, URISyntaxException {
 
         queues = repQueues;
@@ -140,7 +128,7 @@ public class PipelineOrchestrator extends Thread {
         activeSchemaVersion =  new ActiveSchemaVersion(configuration);
         eventAugmenter = new EventAugmenter(activeSchemaVersion);
 
-        currentTransactionMetadata = new CurrentTransactionMetadata();
+        currentTransactionMetadata = null;
 
         this.applier = applier;
 
@@ -162,7 +150,21 @@ public class PipelineOrchestrator extends Thread {
 
         this.pipelinePosition = pipelinePosition;
 
-        this.queryInspector = new QueryInspector(configuration.getpGTIDPattern());
+        queryInspector = new QueryInspector(configuration.getpGTIDPattern());
+
+        QueryEventHandler queryEventHandler = new QueryEventHandler(this, activeSchemaVersion, applier, pgtidCounter, commitQueryCounter, pipelinePosition, queryInspector, eventAugmenter);
+        TableMapEventHandler tableMapEventHandler = new TableMapEventHandler(this, applier, heartBeatCounter, pipelinePosition, replicantPool);
+        UpdateRowsEventHandler updateRowsEventHandler = new UpdateRowsEventHandler(this, applier, updateEventCounter, eventAugmenter);
+        WriteRowsEventHandler writeRowsEventHandler = new WriteRowsEventHandler(this, applier, insertEventCounter, eventAugmenter);
+        DeleteRowsEventHandler deleteRowsEventHandler = new DeleteRowsEventHandler(this, applier, deleteEventCounter, eventAugmenter);
+        FormatDescriptionEventHandler formatDescriptionEventHandler = new FormatDescriptionEventHandler(this, applier);
+        XidEventHandler xidEventHandler = new XidEventHandler(this, applier, XIDCounter);
+        RotateEventHandler rotateEventHandler = new RotateEventHandler(this, applier, pipelinePosition, configuration.getLastBinlogFileName());
+        eventHandler = new EventHandler(this, queryEventHandler, tableMapEventHandler, updateRowsEventHandler, writeRowsEventHandler, deleteRowsEventHandler, xidEventHandler, formatDescriptionEventHandler, rotateEventHandler);
+    }
+
+    public long getFakeMicrosecondCounter() {
+        return fakeMicrosecondCounter;
     }
 
     public boolean isRunning() {
@@ -171,6 +173,19 @@ public class PipelineOrchestrator extends Thread {
 
     public void setRunning(boolean running) {
         this.running = running;
+    }
+
+    public void requestReplicatorShutdown() {
+        replicatorShutdownRequested = true;
+    }
+
+    public void requestShutdown() {
+        setRunning(false);
+        requestReplicatorShutdown();
+    }
+
+    public boolean isReplicatorShutdownRequested() {
+        return replicatorShutdownRequested;
     }
 
     @Override
@@ -191,6 +206,7 @@ public class PipelineOrchestrator extends Thread {
                         continue;
                     }
 
+                    LOGGER.debug("Received event: " + event);
                     timeOfLastEvent = System.currentTimeMillis();
                     eventsReceivedCounter.mark();
 
@@ -203,11 +219,13 @@ public class PipelineOrchestrator extends Thread {
                         fakeMicrosecondCounter
                     );
 
-                    if (! skipEvent(event)) {
+                    if (skipEvent(event)) {
+                        LOGGER.debug("Skipping event: " + event);
+                        eventsSkippedCounter.mark();
+                    } else {
+                        LOGGER.debug("Processing event: " + event);
                         calculateAndPropagateChanges(event);
                         eventsProcessedCounter.mark();
-                    } else {
-                        eventsSkippedCounter.mark();
                     }
                 } else {
                     LOGGER.debug("Pipeline report: no items in producer event rawQueue. Will sleep for 0.5s and check again.");
@@ -238,8 +256,6 @@ public class PipelineOrchestrator extends Thread {
             }
         }
     }
-
-    private Long replDelay = 0L;
 
     /**
      *  Calculate and propagate changes.
@@ -315,226 +331,11 @@ public class PipelineOrchestrator extends Thread {
             previousTimestamp = originalTimestamp;
         }
 
+        // TODO: do we need it here with transactions?
         doTimestampOverride(event);
 
         // Process Event
-        switch (event.getHeader().getEventType()) {
-
-            // Check for DDL and pGTID:
-            case MySQLConstants.QUERY_EVENT:
-                String querySQL = ((QueryEvent) event).getSql().toString();
-                boolean isPseudoGTID = queryInspector.isPseudoGTID(querySQL);
-                if (isPseudoGTID) {
-                    pgtidCounter.mark();
-
-                    try {
-                        String pseudoGTID = queryInspector.extractPseudoGTID(querySQL);
-                        pipelinePosition.setCurrentPseudoGTID(pseudoGTID);
-                        pipelinePosition.setCurrentPseudoGTIDFullQuery(querySQL);
-                        if (applier instanceof  HBaseApplier) {
-                            try {
-                                ((HBaseApplier) applier).applyPseudoGTIDEvent(new LastCommittedPositionCheckpoint(
-                                    pipelinePosition.getCurrentPosition().getHost(),
-                                    pipelinePosition.getCurrentPosition().getServerID(),
-                                    pipelinePosition.getCurrentPosition().getBinlogFilename(),
-                                    pipelinePosition.getCurrentPosition().getBinlogPosition(),
-                                    pseudoGTID,
-                                    querySQL,
-                                    fakeMicrosecondCounter
-                                ));
-                            } catch (TaskBufferInconsistencyException e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    } catch (QueryInspectorException e) {
-                        LOGGER.error("Failed to update pipelinePosition with new pGTID!", e);
-                        setRunning(false);
-                        requestReplicatorShutdown();
-                    }
-                }
-
-                boolean isDDLTable = queryInspector.isDDLTable(querySQL);
-                boolean isDDLView = queryInspector.isDDLView(querySQL);
-
-                if (queryInspector.isCommit(querySQL, isDDLTable)) {
-                    commitQueryCounter.mark();
-                    applier.applyCommitQueryEvent((QueryEvent) event);
-                } else if (queryInspector.isBegin(querySQL, isDDLTable)) {
-                    currentTransactionMetadata = new CurrentTransactionMetadata();
-                } else if (isDDLTable) {
-                    // Sync all the things here.
-                    applier.forceFlush();
-                    applier.waitUntilAllRowsAreCommitted(event);
-
-                    try {
-                        AugmentedSchemaChangeEvent augmentedSchemaChangeEvent = activeSchemaVersion.transitionSchemaToNextVersion(
-                                eventAugmenter.getSchemaTransitionSequence(event),
-                                event.getHeader().getTimestamp()
-                        );
-
-                        String currentBinlogFileName =
-                                pipelinePosition.getCurrentPosition().getBinlogFilename();
-
-                        long currentBinlogPosition = event.getHeader().getPosition();
-
-                        String pseudoGTID          = pipelinePosition.getCurrentPseudoGTID();
-                        String pseudoGTIDFullQuery = pipelinePosition.getCurrentPseudoGTIDFullQuery();
-                        int currentSlaveId         = pipelinePosition.getCurrentPosition().getServerID();
-
-                        LastCommittedPositionCheckpoint marker = new LastCommittedPositionCheckpoint(
-                                pipelinePosition.getCurrentPosition().getHost(),
-                                currentSlaveId,
-                                currentBinlogFileName,
-                                currentBinlogPosition,
-                                pseudoGTID,
-                                pseudoGTIDFullQuery,
-                                fakeMicrosecondCounter
-                        );
-
-                        LOGGER.info("Save new marker: " + marker.toJson());
-                        Coordinator.saveCheckpointMarker(marker);
-                        applier.applyAugmentedSchemaChangeEvent(augmentedSchemaChangeEvent, this);
-                    } catch (SchemaTransitionException e) {
-                        setRunning(false);
-                        requestReplicatorShutdown();
-                        throw e;
-                    } catch (Exception e) {
-                        LOGGER.error("Failed to save checkpoint marker!");
-                        e.printStackTrace();
-                        setRunning(false);
-                        requestReplicatorShutdown();
-                    }
-                } else if (isDDLView) {
-                    // TODO: add view schema changes to view schema history
-                } else {
-                    LOGGER.warn("Unexpected query event: " + querySQL);
-                }
-                break;
-
-            // TableMap event:
-            case MySQLConstants.TABLE_MAP_EVENT:
-                String tableName = ((TableMapEvent) event).getTableName().toString();
-
-                if (tableName.equals(Constants.HEART_BEAT_TABLE)) {
-                    heartBeatCounter.mark();
-                }
-
-                try {
-
-                    currentTransactionMetadata.updateCache((TableMapEvent) event);
-
-                    long tableID = ((TableMapEvent) event).getTableId();
-                    String dbName = currentTransactionMetadata.getDBNameFromTableID(tableID);
-                    LOGGER.debug("processing events for { db => " + dbName + " table => " + ((TableMapEvent) event).getTableName() + " } ");
-                    LOGGER.debug("fakeMicrosecondCounter at tableMap event => " + fakeMicrosecondCounter);
-
-                    applier.applyTableMapEvent((TableMapEvent) event);
-
-                    this.pipelinePosition.updatePipelineLastMapEventPosition(
-                        replicantPool.getReplicantDBActiveHost(),
-                        replicantPool.getReplicantDBActiveHostServerID(),
-                        (TableMapEvent) event,
-                        fakeMicrosecondCounter
-                    );
-
-                } catch (Exception e) {
-                    LOGGER.error("Could not execute mapEvent block. Requesting replicator shutdown...", e);
-                    requestReplicatorShutdown();
-                }
-
-                break;
-
-            // Data event:
-            case MySQLConstants.UPDATE_ROWS_EVENT:
-            case MySQLConstants.UPDATE_ROWS_EVENT_V2:
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
-                applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
-                updateEventCounter.mark();
-                break;
-
-            case MySQLConstants.WRITE_ROWS_EVENT:
-            case MySQLConstants.WRITE_ROWS_EVENT_V2:
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
-                applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
-                insertEventCounter.mark();
-                break;
-
-            case MySQLConstants.DELETE_ROWS_EVENT:
-            case MySQLConstants.DELETE_ROWS_EVENT_V2:
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((AbstractRowEvent) event, this);
-                applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
-                deleteEventCounter.mark();
-                break;
-
-            case MySQLConstants.XID_EVENT:
-                // Later we may want to tag previous data events with xid_id
-                // (so we can know if events were in the same transaction).
-                applier.applyXidEvent((XidEvent) event);
-                XIDCounter.mark();
-                currentTransactionMetadata = new CurrentTransactionMetadata();
-                break;
-
-            case MySQLConstants.FORMAT_DESCRIPTION_EVENT:
-                applier.applyFormatDescriptionEvent((FormatDescriptionEvent) event);
-                break;
-
-            // flush buffer at the end of binlog file
-            case MySQLConstants.ROTATE_EVENT:
-                RotateEvent rotateEvent = (RotateEvent) event;
-                applier.applyRotateEvent(rotateEvent);
-                LOGGER.info("End of binlog file. Waiting for all tasks to finish before moving forward...");
-
-                //TODO: Investigate if this is the right thing to do.
-                applier.waitUntilAllRowsAreCommitted(rotateEvent);
-
-                String currentBinlogFileName =
-                        pipelinePosition.getCurrentPosition().getBinlogFilename();
-
-                String nextBinlogFileName = rotateEvent.getBinlogFileName().toString();
-                long currentBinlogPosition = rotateEvent.getBinlogPosition();
-
-                LOGGER.info("All rows committed for binlog file "
-                        + currentBinlogFileName + ", moving to next binlog " + nextBinlogFileName);
-
-                String pseudoGTID          = pipelinePosition.getCurrentPseudoGTID();
-                String pseudoGTIDFullQuery = pipelinePosition.getCurrentPseudoGTIDFullQuery();
-                int currentSlaveId         = pipelinePosition.getCurrentPosition().getServerID();
-
-                LastCommittedPositionCheckpoint marker = new LastCommittedPositionCheckpoint(
-                        pipelinePosition.getCurrentPosition().getHost(),
-                        currentSlaveId,
-                        nextBinlogFileName,
-                        currentBinlogPosition,
-                        pseudoGTID,
-                        pseudoGTIDFullQuery,
-                        fakeMicrosecondCounter
-                );
-
-                try {
-                    Coordinator.saveCheckpointMarker(marker);
-                } catch (Exception e) {
-                    LOGGER.error("Failed to save Checkpoint!");
-                    e.printStackTrace();
-                }
-
-                if (currentBinlogFileName.equals(configuration.getLastBinlogFileName())) {
-                    LOGGER.info("processed the last binlog file " + configuration.getLastBinlogFileName());
-                    setRunning(false);
-                    requestReplicatorShutdown();
-                }
-                break;
-
-            // Events that we expect to appear in the binlog, but we don't do
-            // any extra processing.
-            case MySQLConstants.STOP_EVENT:
-                break;
-
-            // Events that we do not expect to appear in the binlog
-            // so a warning should be logged for those types
-            default:
-                LOGGER.warn("Unexpected event type: " + event.getHeader().getEventType());
-                break;
-        }
+        eventHandler.handle(event);
     }
 
     public boolean isReplicant(String schemaName) {
@@ -550,7 +351,6 @@ public class PipelineOrchestrator extends Thread {
      */
     public boolean skipEvent(BinlogEventV4 event) throws Exception {
         boolean eventIsTracked      = false;
-        boolean skipEvent;
 
         // if there is a last safe checkpoint, skip events that are before
         // or equal to it, so that the same events are not writen multiple
@@ -569,8 +369,7 @@ public class PipelineOrchestrator extends Thread {
                         + ", binlog-position => "
                         + pipelinePosition.getLastSafeCheckPointPosition().getBinlogPosition()
                         + " }. Skipping event...");
-                skipEvent = true;
-                return skipEvent;
+                return true;
             }
         }
 
@@ -578,59 +377,59 @@ public class PipelineOrchestrator extends Thread {
             // Query Event:
             case MySQLConstants.QUERY_EVENT:
 
-                String querySQL = ((QueryEvent) event).getSql().toString();
+                switch (queryInspector.getQueryEventType((QueryEvent) event)) {
+                    case "BEGIN":
+                        return false;
+                    case "PSEUDOGTID":
+                        return false;
+                    case "COMMIT":
+                        // COMMIT does not always contain database name so we get it
+                        // from current transaction metadata.
+                        // There is an assumption that all tables in the transaction
+                        // are from the same database. Cross database transactions
+                        // are not supported.
+                        LOGGER.debug("Got commit event: " + event);
+                        TableMapEvent firstMapEvent = currentTransactionMetadata.getFirstMapEventInTransaction();
+                        if (firstMapEvent == null) {
+                            LOGGER.warn(String.format(
+                                    "Received COMMIT event, but currentTransactionMetadata is empty! Tables in transaction are %s",
+                                    Joiner.on(", ").join(currentTransactionMetadata.getCurrentTransactionTableMapEvents().keySet())
+                                    )
+                            );
+                            dropTransaction();
+                            return true;
+                            //throw new TransactionException("Got COMMIT while not in transaction: " + currentTransactionMetadata);
+                        }
 
-                boolean isDDLTable   = queryInspector.isDDLTable(querySQL);
-                boolean isCommit     = queryInspector.isCommit(querySQL, isDDLTable);
-                boolean isBegin      = queryInspector.isBegin(querySQL, isDDLTable);
-                boolean isPseudoGTID = queryInspector.isPseudoGTID(querySQL);
-
-                if (isPseudoGTID) {
-                    skipEvent = false;
-                    return skipEvent;
-                }
-
-                if (isCommit) {
-                    // COMMIT does not always contain database name so we get it
-                    // from current transaction metadata.
-                    // There is an assumption that all tables in the transaction
-                    // are from the same database. Cross database transactions
-                    // are not supported.
-                    TableMapEvent firstMapEvent = currentTransactionMetadata.getFirstMapEventInTransaction();
-                    if (firstMapEvent != null) {
                         String currentTransactionDBName = firstMapEvent.getDatabaseName().toString();
-                        if (isReplicant(currentTransactionDBName)) {
-                            eventIsTracked = true;
-                        } else {
+                        if (!isReplicant(currentTransactionDBName)) {
                             LOGGER.warn(String.format("non-replicated database %s in current transaction.",
                                     currentTransactionDBName));
+                            dropTransaction();
+                            return true;
                         }
-                    } else {
-                        LOGGER.warn(String.format(
-                                "Received COMMIT event, but currentTransactionMetadata is empty! Tables in transaction are %s",
-                                Joiner.on(", ").join(currentTransactionMetadata.getCurrentTransactionTableMapEvents().keySet())
-                            )
-                        );
-                    }
-                } else if (isBegin) {
-                    eventIsTracked = true;
-                } else if (isDDLTable) {
-                    // DDL event should always contain db name
-                    String dbName = ((QueryEvent) event).getDatabaseName().toString();
-                    if ((dbName == null) || dbName.length() == 0) {
-                        LOGGER.warn("No Db name in Query Event. Extracted SQL: " + ((QueryEvent) event).getSql().toString());
-                    }
-                    if (isReplicant(dbName)) {
-                        eventIsTracked = true;
-                    } else {
-                        eventIsTracked = false;
-                        LOGGER.warn("DDL statement " + querySQL + " on non-replicated database: " + dbName + "");
-                    }
-                } else {
-                    // TODO: handle View statement
-                    // LOGGER.warn("Received non-DDL, non-COMMIT, non-BEGIN query: " + querySQL);
+
+                        return false;
+                    case "DDLTABLE":
+                        // DDL event should always contain db name
+                        String dbName = ((QueryEvent) event).getDatabaseName().toString();
+                        if ((dbName == null) || dbName.length() == 0) {
+                            LOGGER.warn("No Db name in Query Event. Extracted SQL: " + ((QueryEvent) event).getSql().toString());
+                        }
+                        if (isReplicant(dbName)) {
+                            // process event
+                            return false;
+                        }
+                        // skip event
+                        LOGGER.warn("DDL statement " + ((QueryEvent) event).getSql() + " on non-replicated database: " + dbName + "");
+                        return true;
+                    case "DDLVIEW":
+                        // TODO: handle View statement
+                        break;
+                    default:
+                        // LOGGER.warn("Received non-DDL, non-COMMIT, non-BEGIN query: " + querySQL);
+                        break;
                 }
-                break;
 
             // TableMap event:
             case MySQLConstants.TABLE_MAP_EVENT:
@@ -648,8 +447,28 @@ public class PipelineOrchestrator extends Thread {
                 break;
 
             case MySQLConstants.XID_EVENT:
-                eventIsTracked = currentTransactionMetadata.getFirstMapEventInTransaction() != null;
-                break;
+                if (!currentTransactionMetadata.hasMappingInTransaction()) {
+                    if (currentTransactionMetadata.getEvents().size() == 0) {
+                        throw new TransactionException("Got COMMIT while not in transaction: " + currentTransactionMetadata);
+                    } else if (currentTransactionMetadata.getEvents().size() == 1) {
+                        BinlogEventV4 bufferedEvent = currentTransactionMetadata.getEvents().peek();
+                        if (bufferedEvent.getHeader().getEventType() == MySQLConstants.QUERY_EVENT && queryInspector.getQueryEventType((QueryEvent) bufferedEvent) == "BEGIN") {
+                            // empty transaction or all of the events in between have been dropped. Skipping
+                            dropTransaction();
+                            return true;
+                        }
+                    }
+                    LOGGER.warn(String.format(
+                            "Received COMMIT event, but currentTransactionMetadata is empty! Tables in transaction are %s",
+                            Joiner.on(", ").join(currentTransactionMetadata.getCurrentTransactionTableMapEvents().keySet())
+                            )
+                    );
+                    throw new TransactionException("Received COMMIT event, but currentTransactionMetadata is empty!" + currentTransactionMetadata);
+                    //dropTransaction();
+                    //return true;
+                    //throw new TransactionException("Got COMMIT while not in transaction: " + currentTransactionMetadata);
+                }
+                return false;
 
             case MySQLConstants.ROTATE_EVENT:
                 // This is a  workaround for a bug in open replicator
@@ -681,6 +500,68 @@ public class PipelineOrchestrator extends Thread {
         }
 
         return !eventIsTracked;
+    }
+
+    public boolean beginTransaction() {
+        if (currentTransactionMetadata != null) {
+            return false;
+        }
+        currentTransactionMetadata = new CurrentTransactionMetadata();
+        return true;
+    }
+
+    public void addEventIntoTransaction(BinlogEventV4 event) throws TransactionException {
+        if (!isInTransaction()) {
+            throw new TransactionException("Failed to add new event into transaction buffer while not in transaction: " + event);
+        }
+        //TODO: add size limit
+        currentTransactionMetadata.addEvent(event);
+    }
+
+    public boolean isInTransaction() {
+        return (currentTransactionMetadata != null);
+    }
+
+    public void commitTransaction(long timestamp, long xid) {
+        // manual transaction commit
+        // override timestamps
+        currentTransactionMetadata.prepareEventsToCommit(timestamp);
+        // apply changes from buffer and pass xid from the event of commit
+        for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
+            eventHandler.apply(event, xid);
+        }
+        currentTransactionMetadata = null;
+    }
+
+    public void commitTransaction(XidEvent xidEvent) {
+        // xa-capable engines commit block (InnoDB)
+        // prepare events in buffer
+        currentTransactionMetadata.prepareEventsToCommit(xidEvent);
+        // apply changes from buffer and pass xid from the event of commit
+        for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
+            eventHandler.apply(event, xidEvent.getXid());
+        }
+        currentTransactionMetadata = null;
+    }
+
+    public void commitTransaction(QueryEvent queryEvent) {
+        // MyIsam commit block
+        // prepare events in buffer
+        currentTransactionMetadata.prepareEventsToCommit(queryEvent);
+        // apply changes from buffer and pass xid from the event of commit
+        for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
+            eventHandler.apply(event, 0);
+        }
+        currentTransactionMetadata = null;
+    }
+
+    public void dropTransaction() {
+        LOGGER.debug("Transaction dropped");
+        currentTransactionMetadata = null;
+    }
+
+    public CurrentTransactionMetadata getCurrentTransactionMetadata() {
+        return currentTransactionMetadata;
     }
 
     private void doTimestampOverride(BinlogEventV4 event) {

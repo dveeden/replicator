@@ -362,6 +362,11 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
+    public void applyBeginQueryEvent(QueryEvent event) {
+
+    }
+
+    @Override
     public void applyCommitQueryEvent(QueryEvent event) {
 
     }

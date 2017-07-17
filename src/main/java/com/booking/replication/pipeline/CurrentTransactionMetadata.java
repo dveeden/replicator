@@ -1,34 +1,73 @@
 package com.booking.replication.pipeline;
 
 import com.booking.replication.schema.exception.TableMapException;
+import com.google.code.or.binlog.BinlogEventV4;
+import com.google.code.or.binlog.impl.event.BinlogEventV4HeaderImpl;
+import com.google.code.or.binlog.impl.event.QueryEvent;
 import com.google.code.or.binlog.impl.event.TableMapEvent;
+import com.google.code.or.binlog.impl.event.XidEvent;
 import com.google.common.base.Joiner;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by bosko on 11/10/15.
  */
 public class CurrentTransactionMetadata {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(CurrentTransactionMetadata.class);
+
     private Map<Long,String> tableID2Name = new HashMap<>();
     private Map<Long, String> tableID2DBName = new HashMap<>();
 
     private TableMapEvent firstMapEventInTransaction = null;
+    private Queue<BinlogEventV4> events = new LinkedList<>();
 
     private final Map<String, TableMapEvent> currentTransactionTableMapEvents = new HashMap<>();
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(CurrentTransactionMetadata.class);
+    @Override
+    public String toString() {
+        StringBuffer stringBuffer = new StringBuffer();
+        stringBuffer.append("tableID2Name: " + tableID2Name);
+        stringBuffer.append(", tableID2DBName: " + tableID2DBName);
+        stringBuffer.append(", events size: " + events.size());
+        stringBuffer.append(", events:\n    - " + Joiner.on("\n    - ").join(events));
+        return stringBuffer.toString();
+    }
+
+    public void addEvent(BinlogEventV4 event) {
+        events.add(event);
+    }
+
+    public Queue<BinlogEventV4> getEvents() {
+        return events;
+    }
+
+    public void prepareEventsToCommit(long timestamp) {
+        doTimestampOverride(timestamp);
+    }
+    public void prepareEventsToCommit(XidEvent event) {
+        doTimestampOverride(event.getHeader().getTimestamp());
+    }
+    public void prepareEventsToCommit(QueryEvent event) {
+        doTimestampOverride(event.getHeader().getTimestamp());
+    }
+
+    private void doTimestampOverride(long timestamp) {
+        for (BinlogEventV4 event : events) {
+            ((BinlogEventV4HeaderImpl) event.getHeader()).setTimestamp(timestamp);
+        }
+    }
+
 
     /**
      * Update table map cache.
      */
     public void updateCache(TableMapEvent event) {
-
+        LOGGER.debug("Updating cache. firstMapEventInTransaction: " + firstMapEventInTransaction + ", event: " + event);
         if (firstMapEventInTransaction == null) {
             firstMapEventInTransaction = event;
         }
@@ -81,6 +120,10 @@ public class CurrentTransactionMetadata {
 
     public TableMapEvent getFirstMapEventInTransaction() {
         return firstMapEventInTransaction;
+    }
+
+    public boolean hasMappingInTransaction() {
+        return firstMapEventInTransaction != null;
     }
 
 

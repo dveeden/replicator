@@ -280,6 +280,7 @@ public class Replicator {
             configuration,
             applier,
             replicantPool,
+            binlogEventProducer.getOpenReplicator(),
             fakeMicrosecondCounter
     );
 

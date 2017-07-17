@@ -40,6 +40,11 @@ public class EventCountingApplier implements Applier {
     }
 
     @Override
+    public void applyBeginQueryEvent(QueryEvent event) {
+
+    }
+
+    @Override
     public void applyCommitQueryEvent(QueryEvent event) {
         wrapped.applyCommitQueryEvent(event);
         counter.inc();
