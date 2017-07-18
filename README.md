@@ -22,7 +22,7 @@ Initial snapshot (after the database has been flushed to the binlog with [binlog
 java -jar mysql-replicator.jar \
     --hbase-namespace $hbase-namespace \
     --applier hbase --schema $schema \
-    --binlog-filename $first-binlog-filename \
+    --binlog-filename $before-binlog-filename \
     --config-path $config-path \
     --initial-snapshot
 ````

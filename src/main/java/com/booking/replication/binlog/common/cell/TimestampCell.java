@@ -10,6 +10,9 @@ public final class TimestampCell implements Cell {
 
     private java.sql.Timestamp value;
 
+    public TimestampCell(java.sql.Timestamp value) {
+        this.value = value;
+    }
     /**
      *
      */

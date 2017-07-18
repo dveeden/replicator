@@ -127,7 +127,7 @@ class BlackholeCopyMethod(object):
             if table_name[0:6] == '_BKTB_':
                 self.post()
                 logger.error("Broken database")
-                raise Exception("Did you forget to recover the database? Try to run db-recovery.py first!")
+                raise Exception("Did you forget to recover the database? Try to run db-recovery.py before!")
             self.hashCount += 1
             with open (hashmapFileName, 'a') as f:
                 f.write("_BKTB_%d,%s\n" % (self.hashCount, table_name))
