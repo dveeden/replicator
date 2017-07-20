@@ -4,6 +4,7 @@ import com.booking.replication.Configuration;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import com.google.code.or.binlog.BinlogEventV4;
@@ -59,7 +60,7 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
-    public void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedRowsEvent, PipelineOrchestrator caller) {
+    public void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedRowsEvent, CurrentTransactionMetadata currentTransactionMetadata) {
         if (VERBOSE) {
             LOGGER.info("Row Event: number of rows in event => " + augmentedRowsEvent.getSingleRowEvents().size());
         }

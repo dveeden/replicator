@@ -2,6 +2,7 @@ package com.booking.replication.applier;
 
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
@@ -17,7 +18,7 @@ import java.io.IOException;
  */
 public interface Applier {
 
-    void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedSingleRowEvent, PipelineOrchestrator caller)
+    void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedSingleRowEvent, CurrentTransactionMetadata currentTransactionMetadata)
             throws ApplierException, IOException;
 
     void applyBeginQueryEvent(QueryEvent event);

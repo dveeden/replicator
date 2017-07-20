@@ -7,6 +7,7 @@ import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.HBaseSchemaManager;
 
@@ -40,7 +41,7 @@ import java.io.IOException;
 public class HBaseApplier implements Applier {
 
     // TODO: move configuration vars to Configuration
-    private static final int POOL_SIZE = 30;
+    private static final int POOL_SIZE = 60;
 
     private static final int UUID_BUFFER_SIZE = 1000; // <- max number of rows in one uuid buffer
 
@@ -124,16 +125,15 @@ public class HBaseApplier implements Applier {
     }
     /**
      * Core logic of the applier. Processes data events and writes to HBase.
-     *
-     * @param augmentedRowsEvent Rows event
-     * @param pipeline Pipeline instance
+     *  @param augmentedRowsEvent Rows event
+     * @param currentTransactionMetadata Current transaction metadata instance
      */
     @Override
     public void applyAugmentedRowsEvent(
             final AugmentedRowsEvent augmentedRowsEvent,
-            final PipelineOrchestrator pipeline) throws ApplierException, IOException {
+            final CurrentTransactionMetadata currentTransactionMetadata) throws ApplierException, IOException {
 
-        String hbaseNamespace = getHBaseNamespace(pipeline);
+        String hbaseNamespace = getHBaseNamespace(currentTransactionMetadata);
         if (hbaseNamespace == null) {
             return;
         }
@@ -155,11 +155,11 @@ public class HBaseApplier implements Applier {
         }
     }
 
-    private String getHBaseNamespace(PipelineOrchestrator pipeline) {
+    private String getHBaseNamespace(CurrentTransactionMetadata currentTransactionMetadata) {
 
         // get database name from event
         String mySqlDbName = configuration.getReplicantSchemaName();
-        String currentTransactionDB = pipeline.currentTransactionMetadata
+        String currentTransactionDB = currentTransactionMetadata
                 .getFirstMapEventInTransaction()
                 .getDatabaseName()
                 .toString();

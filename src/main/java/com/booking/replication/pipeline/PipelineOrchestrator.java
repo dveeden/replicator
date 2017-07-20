@@ -1,14 +1,10 @@
 package com.booking.replication.pipeline;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
 import com.booking.replication.Configuration;
-import com.booking.replication.Constants;
 import com.booking.replication.Coordinator;
 import com.booking.replication.Metrics;
 import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.HBaseApplier;
-import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.EventAugmenter;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.event.handler.*;
@@ -18,25 +14,28 @@ import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.sql.QueryInspector;
-import com.booking.replication.sql.exception.QueryInspectorException;
-import com.google.code.or.OpenReplicator;
-import com.google.code.or.binlog.BinlogEventV4;
-import com.google.code.or.binlog.impl.event.*;
-import com.google.code.or.common.util.MySQLConstants;
-import com.google.common.base.Joiner;
-
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.google.code.or.OpenReplicator;
+import com.google.code.or.binlog.BinlogEventV4;
+import com.google.code.or.binlog.impl.event.BinlogEventV4HeaderImpl;
+import com.google.code.or.binlog.impl.event.QueryEvent;
+import com.google.code.or.binlog.impl.event.TableMapEvent;
+import com.google.code.or.binlog.impl.event.XidEvent;
+import com.google.code.or.common.util.MySQLConstants;
+import com.google.common.base.Joiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.sql.SQLException;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Queue;
 import java.util.concurrent.TimeUnit;
+
+import static com.codahale.metrics.MetricRegistry.name;
 
 
 /**
@@ -52,42 +51,28 @@ import java.util.concurrent.TimeUnit;
  * </p>
  */
 public class PipelineOrchestrator extends Thread {
-    private static EventAugmenter                  eventAugmenter;
-    private static ActiveSchemaVersion             activeSchemaVersion;
+    public static final long FAKEXID = 0;
+    private static final Logger LOGGER = LoggerFactory.getLogger(PipelineOrchestrator.class);
+    private static final Meter eventsReceivedCounter = Metrics.registry.meter(name("events", "eventsReceivedCounter"));
+    private static final Meter eventsProcessedCounter = Metrics.registry.meter(name("events", "eventsProcessedCounter"));
+    private static final Meter eventsSkippedCounter = Metrics.registry.meter(name("events", "eventsSkippedCounter"));
+    private static final int BUFFER_FLUSH_INTERVAL = 30000; // <- force buffer flush every 30 sec
+    private static final int DEFAULT_VERSIONS_FOR_MIRRORED_TABLES = 1000;
+    private static EventAugmenter eventAugmenter;
+    private static ActiveSchemaVersion activeSchemaVersion;
     private static LastCommittedPositionCheckpoint lastVerifiedPseudoGTIDCheckPoint;
-
-    public  final Configuration                   configuration;
-    private final ReplicantPool                   replicantPool;
-    private final Applier                         applier;
-    private final ReplicatorQueues                queues;
-    private final QueryInspector                  queryInspector;
-    private final EventHandler                    eventHandler;
-
+    public final Configuration configuration;
+    private final ReplicantPool replicantPool;
+    private final Applier applier;
+    private final ReplicatorQueues queues;
+    private final QueryInspector queryInspector;
+    private final EventDispatcher eventDispatcher = new EventDispatcher();;
+    private final PipelinePosition pipelinePosition;
     public CurrentTransactionMetadata currentTransactionMetadata;
 
-    private final PipelinePosition pipelinePosition;
-
     private volatile boolean running = false;
-
     private volatile boolean replicatorShutdownRequested = false;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PipelineOrchestrator.class);
-
-    private static final Meter XIDCounter           = Metrics.registry.meter(name("events", "XIDCounter"));
-    private static final Meter deleteEventCounter   = Metrics.registry.meter(name("events", "deleteEventCounter"));
-    private static final Meter insertEventCounter   = Metrics.registry.meter(name("events", "insertEventCounter"));
-    private static final Meter commitQueryCounter   = Metrics.registry.meter(name("events", "commitQueryCounter"));
-    private static final Meter updateEventCounter   = Metrics.registry.meter(name("events", "updateEventCounter"));
-    private static final Meter heartBeatCounter     = Metrics.registry.meter(name("events", "heartBeatCounter"));
-    private static final Meter pgtidCounter         = Metrics.registry.meter(name("events", "pgtidCounter"));
-
-    private static final Meter eventsReceivedCounter    = Metrics.registry.meter(name("events", "eventsReceivedCounter"));
-    private static final Meter eventsProcessedCounter   = Metrics.registry.meter(name("events", "eventsProcessedCounter"));
-    private static final Meter eventsSkippedCounter     = Metrics.registry.meter(name("events", "eventsSkippedCounter"));
-
-    private static final int BUFFER_FLUSH_INTERVAL = 30000; // <- force buffer flush every 30 sec
-
-    private static final int DEFAULT_VERSIONS_FOR_MIRRORED_TABLES = 1000;
 
     private HashMap<String,Boolean> rotateEventAllreadySeenForBinlogFile = new HashMap<>();
 
@@ -126,7 +111,7 @@ public class PipelineOrchestrator extends Thread {
         this.fakeMicrosecondCounter = fakeMicrosecondCounter;
 
         activeSchemaVersion =  new ActiveSchemaVersion(configuration);
-        eventAugmenter = new EventAugmenter(activeSchemaVersion);
+        eventAugmenter = new EventAugmenter(activeSchemaVersion, configuration.getAugmenterApplyUuid(), configuration.getAugmenterApplyXid());
 
         currentTransactionMetadata = null;
 
@@ -151,16 +136,47 @@ public class PipelineOrchestrator extends Thread {
         this.pipelinePosition = pipelinePosition;
 
         queryInspector = new QueryInspector(configuration.getpGTIDPattern());
+        initEventDispatcher();
+    }
 
-        QueryEventHandler queryEventHandler = new QueryEventHandler(this, activeSchemaVersion, applier, pgtidCounter, commitQueryCounter, pipelinePosition, queryInspector, eventAugmenter);
-        TableMapEventHandler tableMapEventHandler = new TableMapEventHandler(this, applier, heartBeatCounter, pipelinePosition, replicantPool);
-        UpdateRowsEventHandler updateRowsEventHandler = new UpdateRowsEventHandler(this, applier, updateEventCounter, eventAugmenter);
-        WriteRowsEventHandler writeRowsEventHandler = new WriteRowsEventHandler(this, applier, insertEventCounter, eventAugmenter);
-        DeleteRowsEventHandler deleteRowsEventHandler = new DeleteRowsEventHandler(this, applier, deleteEventCounter, eventAugmenter);
-        FormatDescriptionEventHandler formatDescriptionEventHandler = new FormatDescriptionEventHandler(this, applier);
-        XidEventHandler xidEventHandler = new XidEventHandler(this, applier, XIDCounter);
-        RotateEventHandler rotateEventHandler = new RotateEventHandler(this, applier, pipelinePosition, configuration.getLastBinlogFileName());
-        eventHandler = new EventHandler(this, queryEventHandler, tableMapEventHandler, updateRowsEventHandler, writeRowsEventHandler, deleteRowsEventHandler, xidEventHandler, formatDescriptionEventHandler, rotateEventHandler);
+    private void initEventDispatcher() {
+        EventHandlerConfiguration eventHandlerConfiguration = new EventHandlerConfiguration(applier, eventAugmenter, this, queryInspector);
+
+        eventDispatcher.registerHandler(
+                MySQLConstants.QUERY_EVENT,
+                new QueryEventHandler(eventHandlerConfiguration, activeSchemaVersion, pipelinePosition));
+
+        eventDispatcher.registerHandler(
+                MySQLConstants.TABLE_MAP_EVENT,
+                new TableMapEventHandler(eventHandlerConfiguration, pipelinePosition, replicantPool));
+
+        eventDispatcher.registerHandler(Arrays.asList(
+                MySQLConstants.UPDATE_ROWS_EVENT, MySQLConstants.UPDATE_ROWS_EVENT_V2),
+                new UpdateRowsEventHandler(eventHandlerConfiguration));
+
+        eventDispatcher.registerHandler(Arrays.asList(
+                MySQLConstants.WRITE_ROWS_EVENT, MySQLConstants.WRITE_ROWS_EVENT_V2),
+                new WriteRowsEventHandler(eventHandlerConfiguration));
+
+        eventDispatcher.registerHandler(Arrays.asList(
+                MySQLConstants.DELETE_ROWS_EVENT, MySQLConstants.DELETE_ROWS_EVENT_V2),
+                new DeleteRowsEventHandler(eventHandlerConfiguration));
+
+        eventDispatcher.registerHandler(
+                MySQLConstants.XID_EVENT,
+                new XidEventHandler(eventHandlerConfiguration));
+
+        eventDispatcher.registerHandler(
+                MySQLConstants.FORMAT_DESCRIPTION_EVENT,
+                new FormatDescriptionEventHandler(eventHandlerConfiguration));
+
+        eventDispatcher.registerHandler(
+                MySQLConstants.ROTATE_EVENT,
+                new RotateEventHandler(eventHandlerConfiguration, pipelinePosition, configuration.getLastBinlogFileName()));
+
+        eventDispatcher.registerHandler(
+                MySQLConstants.STOP_EVENT,
+                new DummyEventHandler());
     }
 
     public long getFakeMicrosecondCounter() {
@@ -271,12 +287,9 @@ public class PipelineOrchestrator extends Thread {
      *      a. match column names and types
      * </p>
      */
-    public void calculateAndPropagateChanges(BinlogEventV4 event)
-            throws Exception, TableMapException {
+    public void calculateAndPropagateChanges(BinlogEventV4 event) throws Exception {
 
-        AugmentedRowsEvent augmentedRowsEvent;
-
-        if (fakeMicrosecondCounter > 999998L) {
+                if (fakeMicrosecondCounter > 999998L) {
             fakeMicrosecondCounter = 0L;
             LOGGER.warn("Fake microsecond counter's overflowed, resetting to 0. It might lead to incorrect events order.");
         }
@@ -335,7 +348,12 @@ public class PipelineOrchestrator extends Thread {
         doTimestampOverride(event);
 
         // Process Event
-        eventHandler.handle(event);
+        try {
+            eventDispatcher.handle(event);
+        } catch (TransactionException e) {
+            LOGGER.error("EventManger failed to handle event: ", e);
+            requestShutdown();
+        }
     }
 
     public boolean isReplicant(String schemaName) {
@@ -379,7 +397,6 @@ public class PipelineOrchestrator extends Thread {
 
                 switch (queryInspector.getQueryEventType((QueryEvent) event)) {
                     case "BEGIN":
-                        return false;
                     case "PSEUDOGTID":
                         return false;
                     case "COMMIT":
@@ -425,10 +442,12 @@ public class PipelineOrchestrator extends Thread {
                         return true;
                     case "DDLVIEW":
                         // TODO: handle View statement
-                        break;
+                        return true;
+                    case "ANALYZE":
+                        return true;
                     default:
-                        // LOGGER.warn("Received non-DDL, non-COMMIT, non-BEGIN query: " + querySQL);
-                        break;
+                        LOGGER.warn("Skipping event with unknown query type: " + ((QueryEvent) event).getSql());
+                        return false;
                 }
 
             // TableMap event:
@@ -512,10 +531,13 @@ public class PipelineOrchestrator extends Thread {
 
     public void addEventIntoTransaction(BinlogEventV4 event) throws TransactionException {
         if (!isInTransaction()) {
-            throw new TransactionException("Failed to add new event into transaction buffer while not in transaction: " + event);
+            throw new TransactionException("Failed to add new event into a transaction buffer while not in transaction: " + event);
         }
         //TODO: add size limit
         currentTransactionMetadata.addEvent(event);
+        if (currentTransactionMetadata.getEventsCounter() % 10 == 0) {
+            LOGGER.info("Number of events in current transaction " + currentTransactionMetadata.getUuid() + " is: " + currentTransactionMetadata.getEventsCounter());
+        }
     }
 
     public boolean isInTransaction() {
@@ -524,33 +546,36 @@ public class PipelineOrchestrator extends Thread {
 
     public void commitTransaction(long timestamp, long xid) {
         // manual transaction commit
-        // override timestamps
-        currentTransactionMetadata.prepareEventsToCommit(timestamp);
-        // apply changes from buffer and pass xid from the event of commit
-        for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
-            eventHandler.apply(event, xid);
-        }
-        currentTransactionMetadata = null;
+        currentTransactionMetadata.setXid(xid);
+        currentTransactionMetadata.doTimestampOverride(timestamp);
+        commitTransaction();
     }
 
     public void commitTransaction(XidEvent xidEvent) {
         // xa-capable engines commit block (InnoDB)
-        // prepare events in buffer
-        currentTransactionMetadata.prepareEventsToCommit(xidEvent);
-        // apply changes from buffer and pass xid from the event of commit
-        for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
-            eventHandler.apply(event, xidEvent.getXid());
-        }
-        currentTransactionMetadata = null;
+        currentTransactionMetadata.setXid(xidEvent.getXid());
+        currentTransactionMetadata.doTimestampOverride(xidEvent.getHeader().getTimestamp());
+        commitTransaction();
     }
 
     public void commitTransaction(QueryEvent queryEvent) {
         // MyIsam commit block
-        // prepare events in buffer
-        currentTransactionMetadata.prepareEventsToCommit(queryEvent);
-        // apply changes from buffer and pass xid from the event of commit
+        currentTransactionMetadata.setXid(FAKEXID);
+        currentTransactionMetadata.doTimestampOverride(queryEvent.getHeader().getTimestamp());
+        commitTransaction();
+    }
+
+    private void commitTransaction() {
+        // apply all the buffered events
+        LOGGER.debug("Committing transaction uuid: " + currentTransactionMetadata.getUuid() + ", id: " + currentTransactionMetadata.getXid());
+        // apply changes from buffer and pass current metadata with xid and uuid
         for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
-            eventHandler.apply(event, 0);
+            try {
+                eventDispatcher.apply(event, currentTransactionMetadata);
+            } catch (EventHandlerApplyException e) {
+                LOGGER.error("Failed to commit transaction: ", e);
+                requestShutdown();
+            }
         }
         currentTransactionMetadata = null;
     }
@@ -564,6 +589,7 @@ public class PipelineOrchestrator extends Thread {
         return currentTransactionMetadata;
     }
 
+    // TODO: do we need it with transactions?
     private void doTimestampOverride(BinlogEventV4 event) {
         if (configuration.isInitialSnapshotMode()) {
             doInitialSnapshotEventTimestampOverride(event);

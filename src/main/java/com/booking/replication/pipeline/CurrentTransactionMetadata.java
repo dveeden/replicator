@@ -20,48 +20,60 @@ public class CurrentTransactionMetadata {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CurrentTransactionMetadata.class);
 
+    private UUID uuid = UUID.randomUUID();
+    private long xid;
     private Map<Long,String> tableID2Name = new HashMap<>();
     private Map<Long, String> tableID2DBName = new HashMap<>();
 
     private TableMapEvent firstMapEventInTransaction = null;
     private Queue<BinlogEventV4> events = new LinkedList<>();
+    private long eventsCounter = 0;
 
     private final Map<String, TableMapEvent> currentTransactionTableMapEvents = new HashMap<>();
 
     @Override
     public String toString() {
         StringBuffer stringBuffer = new StringBuffer();
-        stringBuffer.append("tableID2Name: " + tableID2Name);
+        stringBuffer.append("uuid: " + uuid);
+        stringBuffer.append(", xid: " + xid);
+        stringBuffer.append(", tableID2Name: " + tableID2Name);
         stringBuffer.append(", tableID2DBName: " + tableID2DBName);
         stringBuffer.append(", events size: " + events.size());
         stringBuffer.append(", events:\n    - " + Joiner.on("\n    - ").join(events));
         return stringBuffer.toString();
     }
 
+    public UUID getUuid() {
+        return uuid;
+    }
+
+    public long getXid() {
+        return xid;
+    }
+
+    public void setXid(long xid) {
+        this.xid = xid;
+    }
+
+
     public void addEvent(BinlogEventV4 event) {
         events.add(event);
+        eventsCounter++;
     }
 
     public Queue<BinlogEventV4> getEvents() {
         return events;
     }
 
-    public void prepareEventsToCommit(long timestamp) {
-        doTimestampOverride(timestamp);
-    }
-    public void prepareEventsToCommit(XidEvent event) {
-        doTimestampOverride(event.getHeader().getTimestamp());
-    }
-    public void prepareEventsToCommit(QueryEvent event) {
-        doTimestampOverride(event.getHeader().getTimestamp());
-    }
-
-    private void doTimestampOverride(long timestamp) {
+    public void doTimestampOverride(long timestamp) {
         for (BinlogEventV4 event : events) {
             ((BinlogEventV4HeaderImpl) event.getHeader()).setTimestamp(timestamp);
         }
     }
 
+    public long getEventsCounter() {
+        return eventsCounter;
+    }
 
     /**
      * Update table map cache.

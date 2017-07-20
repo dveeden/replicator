@@ -7,4 +7,7 @@ public class TransactionException extends Exception {
     public TransactionException(String string) {
         super(string);
     }
+    public TransactionException(String string, Throwable throwable) {
+        super(string, throwable);
+    }
 }

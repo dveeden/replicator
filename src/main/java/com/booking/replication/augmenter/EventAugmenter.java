@@ -3,6 +3,7 @@ package com.booking.replication.augmenter;
 import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.column.ColumnSchema;
@@ -41,9 +42,12 @@ import java.util.HashMap;
  */
 public class EventAugmenter {
 
-    // public CurrentTransactionMetadata currentTransactionMetadata;
+    public static String UUID_FIELD_NAME = "_replicator_uuid";
+    public static String XID_FIELD_NAME = "_replicator_xid";
 
     private ActiveSchemaVersion activeSchemaVersion;
+    private final boolean applyUuid;
+    private final boolean applyXid;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(EventAugmenter.class);
 
@@ -52,8 +56,10 @@ public class EventAugmenter {
      *
      * @param asv Active schema version
      */
-    public EventAugmenter(ActiveSchemaVersion asv) throws SQLException, URISyntaxException {
+    public EventAugmenter(ActiveSchemaVersion asv, boolean applyUuid, boolean applyXid) throws SQLException, URISyntaxException {
         activeSchemaVersion = asv;
+        this.applyUuid = applyUuid;
+        this.applyXid = applyXid;
     }
 
     /**
@@ -121,9 +127,10 @@ public class EventAugmenter {
      * <p>Maps raw binlog event to column names and types</p>
      *
      * @param  event               AbstractRowEvent
+     * @param currentTransactionMetadata
      * @return augmentedDataEvent  AugmentedRow
      */
-    public AugmentedRowsEvent mapDataEventToSchema(AbstractRowEvent event, PipelineOrchestrator caller) throws TableMapException {
+    public AugmentedRowsEvent mapDataEventToSchema(AbstractRowEvent event, CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException {
 
         AugmentedRowsEvent au;
 
@@ -131,27 +138,27 @@ public class EventAugmenter {
 
             case MySQLConstants.UPDATE_ROWS_EVENT:
                 UpdateRowsEvent updateRowsEvent = ((UpdateRowsEvent) event);
-                au = augmentUpdateRowsEvent(updateRowsEvent, caller);
+                au = augmentUpdateRowsEvent(updateRowsEvent, currentTransactionMetadata);
                 break;
             case MySQLConstants.UPDATE_ROWS_EVENT_V2:
                 UpdateRowsEventV2 updateRowsEventV2 = ((UpdateRowsEventV2) event);
-                au = augmentUpdateRowsEventV2(updateRowsEventV2, caller);
+                au = augmentUpdateRowsEventV2(updateRowsEventV2, currentTransactionMetadata);
                 break;
             case MySQLConstants.WRITE_ROWS_EVENT:
                 WriteRowsEvent writeRowsEvent = ((WriteRowsEvent) event);
-                au = augmentWriteRowsEvent(writeRowsEvent, caller);
+                au = augmentWriteRowsEvent(writeRowsEvent, currentTransactionMetadata);
                 break;
             case MySQLConstants.WRITE_ROWS_EVENT_V2:
                 WriteRowsEventV2 writeRowsEventV2 = ((WriteRowsEventV2) event);
-                au = augmentWriteRowsEventV2(writeRowsEventV2, caller);
+                au = augmentWriteRowsEventV2(writeRowsEventV2, currentTransactionMetadata);
                 break;
             case MySQLConstants.DELETE_ROWS_EVENT:
                 DeleteRowsEvent deleteRowsEvent = ((DeleteRowsEvent) event);
-                au = augmentDeleteRowsEvent(deleteRowsEvent, caller);
+                au = augmentDeleteRowsEvent(deleteRowsEvent, currentTransactionMetadata);
                 break;
             case MySQLConstants.DELETE_ROWS_EVENT_V2:
                 DeleteRowsEventV2 deleteRowsEventV2 = ((DeleteRowsEventV2) event);
-                au = augmentDeleteRowsEventV2(deleteRowsEventV2, caller);
+                au = augmentDeleteRowsEventV2(deleteRowsEventV2, currentTransactionMetadata);
                 break;
             default:
                 throw new TableMapException("RBR event type expected! Received type: " + event.getHeader().getEventType(), event);
@@ -164,10 +171,10 @@ public class EventAugmenter {
         return au;
     }
 
-    private AugmentedRowsEvent augmentWriteRowsEvent(WriteRowsEvent writeRowsEvent, PipelineOrchestrator caller) throws TableMapException {
+    private AugmentedRowsEvent augmentWriteRowsEvent(WriteRowsEvent writeRowsEvent, CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException {
 
         // table name
-        String tableName =  caller.currentTransactionMetadata.getTableNameFromID(writeRowsEvent.getTableId());
+        String tableName =  currentTransactionMetadata.getTableNameFromID(writeRowsEvent.getTableId());
 
         PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
 
@@ -197,8 +204,18 @@ public class EventAugmenter {
                     tableName,
                     tableSchemaVersion,
                     evType,
-                    writeRowsEvent.getHeader()
+                    writeRowsEvent.getHeader(),
+                    applyUuid,
+                    applyXid
             );
+
+            // add transaction uuid and xid
+            if (applyUuid) {
+                augEvent.addColumnDataForInsert(UUID_FIELD_NAME, currentTransactionMetadata.getUuid().toString(), "VARCHAR");
+            }
+            if (applyXid) {
+                augEvent.addColumnDataForInsert(XID_FIELD_NAME, String.valueOf(currentTransactionMetadata.getXid()), "BIGINT");
+            }
 
             tableMetrics.inserted.inc();
             tableMetrics.processed.inc();
@@ -228,10 +245,10 @@ public class EventAugmenter {
     // Same as for V1 write event. There is some extra data in V2, but not sure if we can use it.
     private AugmentedRowsEvent augmentWriteRowsEventV2(
             WriteRowsEventV2 writeRowsEvent,
-            PipelineOrchestrator caller) throws TableMapException {
+            CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException {
 
         // table name
-        String tableName = caller.currentTransactionMetadata.getTableNameFromID(writeRowsEvent.getTableId());
+        String tableName = currentTransactionMetadata.getTableNameFromID(writeRowsEvent.getTableId());
 
         PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
 
@@ -260,8 +277,18 @@ public class EventAugmenter {
                 tableName,
                     tableSchemaVersion,
                 evType,
-                writeRowsEvent.getHeader()
+                writeRowsEvent.getHeader(),
+                    applyUuid,
+                    applyXid
             );
+
+            // add transaction uuid and xid
+            if (applyUuid) {
+                augEvent.addColumnDataForInsert(UUID_FIELD_NAME, currentTransactionMetadata.getUuid().toString(), "VARCHAR");
+            }
+            if (applyXid) {
+                augEvent.addColumnDataForInsert(XID_FIELD_NAME, String.valueOf(currentTransactionMetadata.getXid()), "BIGINT");
+            }
 
             //column index counting starts with 1
             for (int columnIndex = 1; columnIndex <= numberOfColumns ; columnIndex++ ) {
@@ -289,11 +316,11 @@ public class EventAugmenter {
         return augEventGroup;
     }
 
-    private AugmentedRowsEvent augmentDeleteRowsEvent(DeleteRowsEvent deleteRowsEvent, PipelineOrchestrator pipeline)
+    private AugmentedRowsEvent augmentDeleteRowsEvent(DeleteRowsEvent deleteRowsEvent, CurrentTransactionMetadata currentTransactionMetadata)
             throws TableMapException {
 
         // table name
-        String tableName = pipeline.currentTransactionMetadata.getTableNameFromID(deleteRowsEvent.getTableId());
+        String tableName = currentTransactionMetadata.getTableNameFromID(deleteRowsEvent.getTableId());
 
         PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
 
@@ -320,8 +347,19 @@ public class EventAugmenter {
                     tableName,
                     tableSchemaVersion,
                     evType,
-                    deleteRowsEvent.getHeader()
+                    deleteRowsEvent.getHeader(),
+                    applyUuid,
+                    applyXid
             );
+
+            // TODO: on delete we need to remove old records
+            // add transaction uuid and xid
+            if (applyUuid) {
+                augEvent.addColumnDataForInsert(UUID_FIELD_NAME, currentTransactionMetadata.getUuid().toString(), "VARCHAR");
+            }
+            if (applyXid) {
+                augEvent.addColumnDataForInsert(XID_FIELD_NAME, String.valueOf(currentTransactionMetadata.getXid()), "BIGINT");
+            }
 
             //column index counting starts with 1
             for (int columnIndex = 1; columnIndex <= numberOfColumns ; columnIndex++ ) {
@@ -350,9 +388,9 @@ public class EventAugmenter {
     // For now this is the same as for V1 event.
     private AugmentedRowsEvent augmentDeleteRowsEventV2(
             DeleteRowsEventV2 deleteRowsEvent,
-            PipelineOrchestrator caller) throws TableMapException {
+            CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException {
         // table name
-        String tableName = caller.currentTransactionMetadata.getTableNameFromID(deleteRowsEvent.getTableId());
+        String tableName = currentTransactionMetadata.getTableNameFromID(deleteRowsEvent.getTableId());
 
         PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
 
@@ -381,8 +419,18 @@ public class EventAugmenter {
                     tableName,
                     tableSchemaVersion,
                     evType,
-                    deleteRowsEvent.getHeader()
+                    deleteRowsEvent.getHeader(),
+                    applyUuid,
+                    applyXid
             );
+
+            // add transaction uuid and xid
+            if (applyUuid) {
+                augEvent.addColumnDataForInsert(UUID_FIELD_NAME, currentTransactionMetadata.getUuid().toString(), "VARCHAR");
+            }
+            if (applyXid) {
+                augEvent.addColumnDataForInsert(XID_FIELD_NAME, String.valueOf(currentTransactionMetadata.getXid()), "BIGINT");
+            }
 
             //column index counting starts with 1
             for (int columnIndex = 1; columnIndex <= numberOfColumns ; columnIndex++ ) {
@@ -409,10 +457,10 @@ public class EventAugmenter {
         return augEventGroup;
     }
 
-    private AugmentedRowsEvent augmentUpdateRowsEvent(UpdateRowsEvent upEvent, PipelineOrchestrator caller) throws TableMapException {
+    private AugmentedRowsEvent augmentUpdateRowsEvent(UpdateRowsEvent upEvent, CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException {
 
         // table name
-        String tableName = caller.currentTransactionMetadata.getTableNameFromID(upEvent.getTableId());
+        String tableName = currentTransactionMetadata.getTableNameFromID(upEvent.getTableId());
 
         PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
 
@@ -443,8 +491,18 @@ public class EventAugmenter {
                 tableName,
                     tableSchemaVersion,
                 evType,
-                upEvent.getHeader()
+                upEvent.getHeader(),
+                    applyUuid,
+                    applyXid
             );
+
+            // add transaction uuid and xid
+            if (applyUuid) {
+                augEvent.addColumnDataForUpdate(UUID_FIELD_NAME, null, currentTransactionMetadata.getUuid().toString(), "VARCHAR");
+            }
+            if (applyXid) {
+                augEvent.addColumnDataForUpdate(XID_FIELD_NAME, null, String.valueOf(currentTransactionMetadata.getXid()), "BIGINT");
+            }
 
             //column index counting starts with 1
             for (int columnIndex = 1; columnIndex <= numberOfColumns ; columnIndex++ ) {
@@ -476,10 +534,10 @@ public class EventAugmenter {
     }
 
     // For now this is the same as V1. Not sure if the extra info in V2 can be of use to us.
-    private AugmentedRowsEvent augmentUpdateRowsEventV2(UpdateRowsEventV2 upEvent, PipelineOrchestrator caller) throws TableMapException {
+    private AugmentedRowsEvent augmentUpdateRowsEventV2(UpdateRowsEventV2 upEvent, CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException {
 
         // table name
-        String tableName = caller.currentTransactionMetadata.getTableNameFromID(upEvent.getTableId());
+        String tableName = currentTransactionMetadata.getTableNameFromID(upEvent.getTableId());
 
         PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
 
@@ -510,8 +568,18 @@ public class EventAugmenter {
                 tableName,
                     tableSchemaVersion,
                 evType,
-                upEvent.getHeader()
+                upEvent.getHeader(),
+                    applyUuid,
+                    applyXid
             );
+
+            // add transaction uuid and xid
+            if (applyUuid) {
+                augEvent.addColumnDataForUpdate(UUID_FIELD_NAME, null, currentTransactionMetadata.getUuid().toString(), "VARCHAR");
+            }
+            if (applyXid) {
+                augEvent.addColumnDataForUpdate(XID_FIELD_NAME, null, String.valueOf(currentTransactionMetadata.getXid()), "BIGINT");
+            }
 
             //column index counting starts with 1
             for (int columnIndex = 1; columnIndex <= numberOfColumns ; columnIndex++ ) {

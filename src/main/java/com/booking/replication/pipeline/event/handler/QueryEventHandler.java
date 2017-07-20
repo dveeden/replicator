@@ -1,6 +1,7 @@
 package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.Coordinator;
+import com.booking.replication.Metrics;
 import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
 import com.booking.replication.applier.HBaseApplier;
@@ -8,6 +9,7 @@ import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.pipeline.PipelinePosition;
 import com.booking.replication.schema.ActiveSchemaVersion;
@@ -15,63 +17,58 @@ import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.sql.QueryInspector;
 import com.booking.replication.sql.exception.QueryInspectorException;
 import com.codahale.metrics.Meter;
+import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.QueryEvent;
-import com.google.code.or.binlog.impl.event.XidEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * Created by edmitriev on 7/12/17.
  */
-public class QueryEventHandler implements AbstractHandler<QueryEvent> {
+public class QueryEventHandler implements BinlogEventV4Handler {
     private static final Logger LOGGER = LoggerFactory.getLogger(QueryEventHandler.class);
-    private static EventAugmenter eventAugmenter;
 
     private final ActiveSchemaVersion activeSchemaVersion;
-    private final Applier applier;
-    private final Meter pgtidCounter;
-    private final Meter commitQueryCounter;
+    private final EventHandlerConfiguration eventHandlerConfiguration;
+    private final Meter pgtidCounter = Metrics.registry.meter(name("events", "pgtidCounter"));;
+    private final Meter commitQueryCounter = Metrics.registry.meter(name("events", "commitQueryCounter"));;
     private final PipelineOrchestrator pipelineOrchestrator;
     private final PipelinePosition pipelinePosition;
-    private final QueryInspector queryInspector;
 
 
-    public QueryEventHandler(PipelineOrchestrator pipelineOrchestrator, ActiveSchemaVersion activeSchemaVersion,
-                             Applier applier, Meter pgtidCounter, Meter commitQueryCounter,
-                             PipelinePosition pipelinePosition, QueryInspector queryInspector,
-                             EventAugmenter eventAugmenter) {
+    public QueryEventHandler(EventHandlerConfiguration eventHandlerConfiguration, ActiveSchemaVersion activeSchemaVersion,
+                             PipelinePosition pipelinePosition) {
         this.activeSchemaVersion = activeSchemaVersion;
-        this.applier = applier;
-        this.pgtidCounter = pgtidCounter;
-        this.commitQueryCounter = commitQueryCounter;
-        this.pipelineOrchestrator = pipelineOrchestrator;
+        this.eventHandlerConfiguration = eventHandlerConfiguration;
         this.pipelinePosition = pipelinePosition;
-        this.queryInspector = queryInspector;
-        this.eventAugmenter = eventAugmenter;
+        this.pipelineOrchestrator = eventHandlerConfiguration.getPipelineOrchestrator();
     }
 
     @Override
-    public void apply(QueryEvent event, long xid) throws EventHandlerApplyException, ApplierException, IOException {
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException, ApplierException, IOException {
+        final QueryEvent event = (QueryEvent) binlogEventV4;
         String querySQL = event.getSql().toString();
 
-        switch (queryInspector.getQueryEventType(event)) {
+        switch (eventHandlerConfiguration.getQueryInspector().getQueryEventType(event)) {
             case "COMMIT":
                 commitQueryCounter.mark();
-                applier.applyCommitQueryEvent(event);
+                eventHandlerConfiguration.getApplier().applyCommitQueryEvent(event);
                 break;
             case "BEGIN":
-                applier.applyBeginQueryEvent(event);
+                eventHandlerConfiguration.getApplier().applyBeginQueryEvent(event);
                 break;
             case "DDLTABLE":
                 // Sync all the things here.
-                applier.forceFlush();
-                applier.waitUntilAllRowsAreCommitted(event);
+                eventHandlerConfiguration.getApplier().forceFlush();
+                eventHandlerConfiguration.getApplier().waitUntilAllRowsAreCommitted(event);
 
                 try {
                     AugmentedSchemaChangeEvent augmentedSchemaChangeEvent = activeSchemaVersion.transitionSchemaToNextVersion(
-                            eventAugmenter.getSchemaTransitionSequence(event),
+                            eventHandlerConfiguration.getEventAugmenter().getSchemaTransitionSequence(event),
                             event.getHeader().getTimestamp()
                     );
 
@@ -96,7 +93,7 @@ public class QueryEventHandler implements AbstractHandler<QueryEvent> {
 
                     LOGGER.info("Save new marker: " + marker.toJson());
                     Coordinator.saveCheckpointMarker(marker);
-                    applier.applyAugmentedSchemaChangeEvent(augmentedSchemaChangeEvent, pipelineOrchestrator);
+                    eventHandlerConfiguration.getApplier().applyAugmentedSchemaChangeEvent(augmentedSchemaChangeEvent, pipelineOrchestrator);
                 } catch (SchemaTransitionException e) {
                     LOGGER.error("Failed to apply query", e);
                     throw new EventHandlerApplyException("Failed to apply event", e);
@@ -104,20 +101,17 @@ public class QueryEventHandler implements AbstractHandler<QueryEvent> {
                     throw new EventHandlerApplyException("Failed to apply event", e);
                 }
                 break;
-            case "DDLVIEW":
-                // TODO: add view schema changes to view schema history
-                break;
             case  "PSEUDOGTID":
                 pgtidCounter.mark();
 
                 try {
-                    String pseudoGTID = queryInspector.extractPseudoGTID(querySQL);
+                    String pseudoGTID = eventHandlerConfiguration.getQueryInspector().extractPseudoGTID(querySQL);
 
                     pipelinePosition.setCurrentPseudoGTID(pseudoGTID);
                     pipelinePosition.setCurrentPseudoGTIDFullQuery(querySQL);
-                    if (applier instanceof HBaseApplier) {
+                    if (eventHandlerConfiguration.getApplier() instanceof HBaseApplier) {
                         try {
-                            ((HBaseApplier) applier).applyPseudoGTIDEvent(new LastCommittedPositionCheckpoint(
+                            ((HBaseApplier) eventHandlerConfiguration.getApplier()).applyPseudoGTIDEvent(new LastCommittedPositionCheckpoint(
                                     pipelinePosition.getCurrentPosition().getHost(),
                                     pipelinePosition.getCurrentPosition().getServerID(),
                                     pipelinePosition.getCurrentPosition().getBinlogFilename(),
@@ -135,6 +129,11 @@ public class QueryEventHandler implements AbstractHandler<QueryEvent> {
                     throw new EventHandlerApplyException("Failed to apply event", e);
                 }
                 break;
+            case "ANALYZE":
+            case "DDLTEMPORARYTABLE":
+            case "DDLVIEW":
+                // TODO: add view schema changes to view schema history
+                break;
             default:
                 LOGGER.warn("Unexpected query event: " + querySQL);
                 break;
@@ -142,8 +141,9 @@ public class QueryEventHandler implements AbstractHandler<QueryEvent> {
     }
 
     @Override
-    public void handle(QueryEvent event) throws TransactionException {
-        switch (queryInspector.getQueryEventType(event)) {
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+        final QueryEvent event = (QueryEvent) binlogEventV4;
+        switch (eventHandlerConfiguration.getQueryInspector().getQueryEventType(event)) {
             case "COMMIT":
                 pipelineOrchestrator.addEventIntoTransaction(event);
                 pipelineOrchestrator.commitTransaction(event);
@@ -154,9 +154,16 @@ public class QueryEventHandler implements AbstractHandler<QueryEvent> {
                 }
                 pipelineOrchestrator.addEventIntoTransaction(event);
                 break;
+            case "DDLTEMPORARYTABLE":
             case "DDLTABLE":
             case "DDLVIEW":
-                pipelineOrchestrator.addEventIntoTransaction(event);
+                if (pipelineOrchestrator.isInTransaction()) {
+                    pipelineOrchestrator.addEventIntoTransaction(event);
+                } else {
+                    pipelineOrchestrator.beginTransaction();
+                    pipelineOrchestrator.addEventIntoTransaction(event);
+                    pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), PipelineOrchestrator.FAKEXID);
+                }
                 break;
             case "PSEUDOGTID":
                 // apply event right away through a fake transaction
@@ -164,11 +171,19 @@ public class QueryEventHandler implements AbstractHandler<QueryEvent> {
                     throw new TransactionException("Failed to begin new transaction. Already have one: " + pipelineOrchestrator.getCurrentTransactionMetadata());
                 }
                 pipelineOrchestrator.addEventIntoTransaction(event);
-                pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), 0);
+                pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), PipelineOrchestrator.FAKEXID);
+                break;
+            case "ANALYZE":
                 break;
             default:
                 LOGGER.warn("Unexpected query event: " + event.getSql());
-                pipelineOrchestrator.addEventIntoTransaction(event);
+                if (pipelineOrchestrator.isInTransaction()) {
+                    pipelineOrchestrator.addEventIntoTransaction(event);
+                } else {
+                    pipelineOrchestrator.beginTransaction();
+                    pipelineOrchestrator.addEventIntoTransaction(event);
+                    pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), PipelineOrchestrator.FAKEXID);
+                }
         }
     }
 }

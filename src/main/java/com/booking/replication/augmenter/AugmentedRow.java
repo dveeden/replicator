@@ -43,6 +43,8 @@ public class AugmentedRow {
 
     private String       rowUUID;
     private String       rowBinlogPositionID;
+    private boolean      applyUuid = false;
+    private boolean      applyXid = false;
 
     // eventColumns: {
     //          column_name  => $name,
@@ -78,13 +80,17 @@ public class AugmentedRow {
             String              tableName,
             TableSchemaVersion tableSchemaVersion,
             String              eventType,
-            BinlogEventV4Header binlogEventV4Header)  throws TableMapException {
+            BinlogEventV4Header binlogEventV4Header,
+            boolean applyUuid,
+            boolean applyXid)  throws TableMapException {
 
         this.rowBinlogEventOrdinal = rowOrdinal;
         this.binlogFileName = binlogFileName;
         this.tableName = tableName;
         this.eventType = eventType;
         this.eventV4Header = binlogEventV4Header;
+        this.applyUuid = applyUuid;
+        this.applyXid = applyXid;
 
         initTableSchema(tableSchemaVersion);
 
@@ -161,6 +167,12 @@ public class AugmentedRow {
     public void initColumnDataSlots() {
         for (String columnName: tableSchemaVersion.getColumnIndexToNameMap().values()) {
             eventColumns.put(columnName, new HashMap<String, String>());
+        }
+        if (applyUuid) {
+            eventColumns.put(EventAugmenter.UUID_FIELD_NAME, new HashMap<String, String>());
+        }
+        if (applyXid) {
+            eventColumns.put(EventAugmenter.XID_FIELD_NAME, new HashMap<String, String>());
         }
     }
 

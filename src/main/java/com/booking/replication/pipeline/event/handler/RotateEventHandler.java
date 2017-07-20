@@ -4,11 +4,11 @@ import com.booking.replication.Coordinator;
 import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.pipeline.PipelinePosition;
-import com.codahale.metrics.Meter;
+import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.RotateEvent;
-import com.google.code.or.binlog.impl.event.XidEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,26 +17,27 @@ import java.io.IOException;
 /**
  * Created by edmitriev on 7/12/17.
  */
-public class RotateEventHandler implements AbstractHandler<RotateEvent> {
+public class RotateEventHandler implements BinlogEventV4Handler {
     private static final Logger LOGGER = LoggerFactory.getLogger(RotateEventHandler.class);
 
-    private final Applier applier;
+    private final EventHandlerConfiguration eventHandlerConfiguration;
     private final PipelineOrchestrator pipelineOrchestrator;
     private final PipelinePosition pipelinePosition;
     private final String lastBinlogFileName;
 
 
-    public RotateEventHandler(PipelineOrchestrator pipelineOrchestrator, Applier applier, PipelinePosition pipelinePosition, String lastBinlogFileName) {
-        this.pipelineOrchestrator = pipelineOrchestrator;
-        this.applier = applier;
+    public RotateEventHandler(EventHandlerConfiguration eventHandlerConfiguration, PipelinePosition pipelinePosition, String lastBinlogFileName) {
+        this.eventHandlerConfiguration = eventHandlerConfiguration;
         this.pipelinePosition = pipelinePosition;
         this.lastBinlogFileName = lastBinlogFileName;
+        this.pipelineOrchestrator = eventHandlerConfiguration.getPipelineOrchestrator();
     }
 
     @Override
-    public void apply(RotateEvent event, long xid) throws EventHandlerApplyException, ApplierException, IOException {
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException, ApplierException, IOException {
+        final RotateEvent event = (RotateEvent) binlogEventV4;
         try {
-            applier.applyRotateEvent(event);
+            eventHandlerConfiguration.getApplier().applyRotateEvent(event);
         } catch (IOException e) {
             throw new EventHandlerApplyException("Failed to apply event", e);
         }
@@ -44,7 +45,7 @@ public class RotateEventHandler implements AbstractHandler<RotateEvent> {
 
         //TODO: Investigate if this is the right thing to do.
 
-        applier.waitUntilAllRowsAreCommitted(event);
+        eventHandlerConfiguration.getApplier().waitUntilAllRowsAreCommitted(event);
 
 
         String currentBinlogFileName =
@@ -73,8 +74,8 @@ public class RotateEventHandler implements AbstractHandler<RotateEvent> {
         try {
             Coordinator.saveCheckpointMarker(marker);
         } catch (Exception e) {
-            LOGGER.error("Failed to save Checkpoint!");
-            e.printStackTrace();
+            LOGGER.error("Failed to save Checkpoint!", e);
+            pipelineOrchestrator.requestShutdown();
         }
 
         if (currentBinlogFileName.equals(lastBinlogFileName)) {
@@ -84,7 +85,14 @@ public class RotateEventHandler implements AbstractHandler<RotateEvent> {
     }
 
     @Override
-    public void handle(RotateEvent event) throws TransactionException {
-        pipelineOrchestrator.addEventIntoTransaction(event);
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+        final RotateEvent event = (RotateEvent) binlogEventV4;
+        if (pipelineOrchestrator.isInTransaction()) {
+            pipelineOrchestrator.addEventIntoTransaction(event);
+        } else {
+            pipelineOrchestrator.beginTransaction();
+            pipelineOrchestrator.addEventIntoTransaction(event);
+            pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), PipelineOrchestrator.FAKEXID);
+        }
     }
 }

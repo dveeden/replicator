@@ -1,45 +1,49 @@
 package com.booking.replication.pipeline.event.handler;
 
+import com.booking.replication.Metrics;
 import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.EventAugmenter;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.exception.TableMapException;
 import com.codahale.metrics.Meter;
+import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.AbstractRowEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * Created by edmitriev on 7/12/17.
  */
-public class WriteRowsEventHandler implements AbstractHandler<AbstractRowEvent> {
+public class WriteRowsEventHandler implements BinlogEventV4Handler {
     private static final Logger LOGGER = LoggerFactory.getLogger(WriteRowsEventHandler.class);
-    private final Applier applier;
-    private final EventAugmenter eventAugmenter;
-    private final Meter counter;
+    private final EventHandlerConfiguration eventHandlerConfiguration;
+    private final Meter counter = Metrics.registry.meter(name("events", "insertEventCounter"));;
     private final PipelineOrchestrator pipelineOrchestrator;
 
 
-    public WriteRowsEventHandler(PipelineOrchestrator pipelineOrchestrator, Applier applier, Meter counter, EventAugmenter eventAugmenter) {
-        this.applier = applier;
-        this.counter = counter;
-        this.eventAugmenter = eventAugmenter;
-        this.pipelineOrchestrator = pipelineOrchestrator;
+    public WriteRowsEventHandler(EventHandlerConfiguration eventHandlerConfiguration) {
+        this.eventHandlerConfiguration = eventHandlerConfiguration;
+        this.pipelineOrchestrator = eventHandlerConfiguration.getPipelineOrchestrator();
     }
 
     @Override
-    public void apply(AbstractRowEvent event, long xid) throws TableMapException, ApplierException, IOException {
-        AugmentedRowsEvent augmentedRowsEvent = eventAugmenter.mapDataEventToSchema(event, pipelineOrchestrator);
-        applier.applyAugmentedRowsEvent(augmentedRowsEvent, pipelineOrchestrator);
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException, ApplierException, IOException {
+        final AbstractRowEvent event = (AbstractRowEvent) binlogEventV4;
+        AugmentedRowsEvent augmentedRowsEvent = eventHandlerConfiguration.getEventAugmenter().mapDataEventToSchema(event, currentTransactionMetadata);
+        eventHandlerConfiguration.getApplier().applyAugmentedRowsEvent(augmentedRowsEvent, currentTransactionMetadata);
         counter.mark();
     }
 
     @Override
-    public void handle(AbstractRowEvent event) throws TransactionException {
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+        final AbstractRowEvent event = (AbstractRowEvent) binlogEventV4;
         pipelineOrchestrator.addEventIntoTransaction(event);
     }
 }

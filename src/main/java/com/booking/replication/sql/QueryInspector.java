@@ -15,22 +15,38 @@ import java.util.regex.Pattern;
  */
 public class QueryInspector {
 
+    private final Pattern isDDLTemporaryTablePattern;
     private final Pattern isDDLTablePattern;
     private final Pattern isDDLViewPattern;
     private final Pattern isBeginPattern;
     private final Pattern isCommitPattern;
     private final Pattern isPseudoGTIDPattern;
+    private final Pattern isAnalyzePattern;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(QueryInspector.class);
 
     public QueryInspector(String gtidPattern) {
 
         this.isDDLTablePattern = Pattern.compile(QueryPatterns.isDDLTable, Pattern.CASE_INSENSITIVE);
+        this.isDDLTemporaryTablePattern = Pattern.compile(QueryPatterns.isDDLTemporaryTable, Pattern.CASE_INSENSITIVE);
         this.isDDLViewPattern = Pattern.compile(QueryPatterns.isDDLView, Pattern.CASE_INSENSITIVE);
         this.isBeginPattern      = Pattern.compile(QueryPatterns.isBEGIN, Pattern.CASE_INSENSITIVE);
         this.isCommitPattern     = Pattern.compile(QueryPatterns.isCOMMIT, Pattern.CASE_INSENSITIVE);
         this.isPseudoGTIDPattern = Pattern.compile(gtidPattern, Pattern.CASE_INSENSITIVE);
+        this.isAnalyzePattern = Pattern.compile(QueryPatterns.isANALYZE, Pattern.CASE_INSENSITIVE);
 
+    }
+
+    public boolean isDDLTemporaryTable(String querySQL) {
+
+        // optimization
+        if (querySQL.equals("BEGIN")) {
+            return false;
+        }
+
+        Matcher matcher = isDDLTemporaryTablePattern.matcher(querySQL);
+
+        return matcher.find();
     }
 
     public boolean isDDLTable(String querySQL) {
@@ -100,6 +116,20 @@ public class QueryInspector {
         return found;
     }
 
+    public boolean isAnalyze(String querySQL) {
+
+        // optimization
+        if (querySQL.equals("BEGIN") || querySQL.equals("COMMIT")) {
+            return false;
+        }
+
+        Matcher matcher = isAnalyzePattern.matcher(querySQL);
+
+        boolean found = matcher.find();
+
+        return found;
+    }
+
     public String extractPseudoGTID(String querySQL) throws QueryInspectorException {
 
         Matcher matcher = isPseudoGTIDPattern.matcher(querySQL);
@@ -130,8 +160,12 @@ public class QueryInspector {
             return "PSEUDOGTID";
         } else if (isDDLTable) {
             return "DDLTABLE";
+        } else if (isDDLTemporaryTable(querySQL)) {
+            return "DDLTEMPORARYTABLE";
         } else if (isDDLView) {
             return "DDLVIEW";
+        } else if (isAnalyze(querySQL)) {
+            return "ANALYZE";
         }
         return "UNKNOWN";
     }

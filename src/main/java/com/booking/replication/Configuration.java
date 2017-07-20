@@ -73,6 +73,15 @@ public class Configuration {
     }
 
     @JsonDeserialize
+    @JsonProperty("augmenter")
+    private AugmenterConfiguration augmenterConfiguration = new AugmenterConfiguration();
+
+    private static class AugmenterConfiguration {
+        public boolean apply_uuid = false;
+        public boolean apply_xid = false;
+    }
+
+    @JsonDeserialize
     @JsonProperty("hbase")
     private HBaseConfiguration hbaseConfiguration;
 
@@ -468,6 +477,15 @@ public class Configuration {
         } else {
             return null;
         }
+    }
+    /**
+     * Augmenter configuation getters.
+     */
+    public boolean getAugmenterApplyUuid(){
+        return augmenterConfiguration.apply_uuid;
+    }
+    public boolean getAugmenterApplyXid(){
+        return augmenterConfiguration.apply_xid;
     }
 
     /**

@@ -1,41 +1,49 @@
 package com.booking.replication.pipeline.event.handler;
 
+import com.booking.replication.Metrics;
 import com.booking.replication.applier.Applier;
+import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.codahale.metrics.Meter;
+import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.XidEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.transaction.xa.Xid;
+
+import static com.codahale.metrics.MetricRegistry.name;
+
 /**
  * Created by edmitriev on 7/12/17.
  */
-public class XidEventHandler implements AbstractHandler<XidEvent> {
+public class XidEventHandler implements BinlogEventV4Handler {
     private static final Logger LOGGER = LoggerFactory.getLogger(XidEventHandler.class);
 
-    private final Applier applier;
-    private final Meter counter;
+    private final EventHandlerConfiguration eventHandlerConfiguration;
+    private final Meter counter = Metrics.registry.meter(name("events", "XIDCounter"));;
     private final PipelineOrchestrator pipelineOrchestrator;
 
 
-    public XidEventHandler(PipelineOrchestrator pipelineOrchestrator, Applier applier, Meter counter) {
-        this.pipelineOrchestrator = pipelineOrchestrator;
-        this.applier = applier;
-        this.counter = counter;
+    public XidEventHandler(EventHandlerConfiguration eventHandlerConfiguration) {
+        this.eventHandlerConfiguration = eventHandlerConfiguration;
+        this.pipelineOrchestrator = eventHandlerConfiguration.getPipelineOrchestrator();
     }
 
 
     @Override
-    public void apply(XidEvent event, long xid) throws EventHandlerApplyException {
-        if (xid != event.getXid()) {
-            throw new EventHandlerApplyException("Xid of transaction doesn't match the current event xid: " + xid + ", " + event);
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException {
+        final XidEvent event = (XidEvent) binlogEventV4;
+        if (currentTransactionMetadata.getXid() != event.getXid()) {
+            throw new EventHandlerApplyException("Xid of transaction doesn't match the current event xid: " + currentTransactionMetadata + ", " + event);
         }
-        applier.applyXidEvent(event);
+        eventHandlerConfiguration.getApplier().applyXidEvent(event);
         counter.mark();
     }
 
     @Override
-    public void handle(XidEvent event) throws TransactionException {
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+        final XidEvent event = (XidEvent) binlogEventV4;
         // prepare trans data
         pipelineOrchestrator.addEventIntoTransaction(event);
         pipelineOrchestrator.commitTransaction(event);
