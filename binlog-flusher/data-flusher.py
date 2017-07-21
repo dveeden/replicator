@@ -272,6 +272,7 @@ class BlackholeCopyMethod(object):
         sql = 'set sql_log_bin=1'
         logger.info(sql)
         cursor.execute(sql)
+        print "Temp tables cleaned up."
         self.conDis.terminate()
 
 

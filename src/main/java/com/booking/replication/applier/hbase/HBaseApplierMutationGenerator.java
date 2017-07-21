@@ -130,7 +130,7 @@ public class HBaseApplierMutationGenerator {
 
                 // No need to process columns on DELETE. Only write delete marker.
 
-                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
+                Long columnTimestamp = row.getRowBinlogPositionTimestamp();
                 String columnName = "row_status";
                 String columnValue = "D";
                 put.addColumn(
@@ -145,7 +145,7 @@ public class HBaseApplierMutationGenerator {
 
                 // Only write values that have changed
 
-                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
+                Long columnTimestamp = row.getRowBinlogPositionTimestamp();
                 String columnValue;
 
                 for (String columnName : row.getEventColumns().keySet()) {
@@ -184,7 +184,7 @@ public class HBaseApplierMutationGenerator {
             }
             case "INSERT": {
 
-                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
+                Long columnTimestamp = row.getRowBinlogPositionTimestamp();
                 String columnValue;
 
                 for (String columnName : row.getEventColumns().keySet()) {
@@ -226,7 +226,7 @@ public class HBaseApplierMutationGenerator {
 
         // String  replicantSchema   = configuration.getReplicantSchemaName().toLowerCase();
         String  mySQLTableName    = row.getTableName();
-        Long    timestampMicroSec = row.getRawBinlogEventHeader().getTimestamp();
+        Long    timestampMicroSec = row.getRowBinlogPositionTimestamp();
         boolean isInitialSnapshot = configuration.isInitialSnapshotMode();
 
         String deltaTableName = TableNameMapper.getCurrentDeltaTableName(
@@ -243,7 +243,7 @@ public class HBaseApplierMutationGenerator {
 
                 // For delta tables in case of DELETE, just write a delete marker
 
-                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
+                Long columnTimestamp = row.getRowBinlogPositionTimestamp();
                 String columnName = "row_status";
                 String columnValue = "D";
                 put.addColumn(
@@ -258,7 +258,7 @@ public class HBaseApplierMutationGenerator {
 
                 // for delta tables write the latest version of the entire row
 
-                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
+                Long columnTimestamp = row.getRowBinlogPositionTimestamp();
 
                 for (String columnName : row.getEventColumns().keySet()) {
                     put.addColumn(
@@ -279,7 +279,7 @@ public class HBaseApplierMutationGenerator {
             }
             case "INSERT": {
 
-                Long columnTimestamp = row.getRawBinlogEventHeader().getTimestamp();
+                Long columnTimestamp = row.getRowBinlogPositionTimestamp();
                 String columnValue;
 
                 for (String columnName : row.getEventColumns().keySet()) {

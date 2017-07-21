@@ -10,15 +10,13 @@ import java.util.List;
  */
 public class AugmentedRowsEvent {
 
+    private String mysqlTableName;
+    private String binlogFileName;
+    private List<AugmentedRow> singleRowEvents = new ArrayList<>();
+
     AugmentedRowsEvent(RawBinlogEvent_Rows ev) {
         binlogFileName = ev.getBinlogFilename();
     }
-
-    private String mysqlTableName;
-
-    private List<AugmentedRow> singleRowEvents = new ArrayList<>();
-
-    private String binlogFileName;
 
     public void addSingleRowEvent(AugmentedRow au) {
         singleRowEvents.add(au);
@@ -40,7 +38,4 @@ public class AugmentedRowsEvent {
         return binlogFileName;
     }
 
-    public void setBinlogFileName(String binlogFileName) {
-        this.binlogFileName = binlogFileName;
-    }
 }

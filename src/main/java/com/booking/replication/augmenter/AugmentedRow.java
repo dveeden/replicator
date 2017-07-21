@@ -40,6 +40,7 @@ public class AugmentedRow {
 
     private String       rowUUID;
     private String       rowBinlogPositionID;
+    private Long         rowBinlogPositionTimestamp; // TODO: replace with commit_time when feature is ready
 
     // eventColumns: {
     //          column_name  => $name,
@@ -74,7 +75,8 @@ public class AugmentedRow {
             String              tableName,
             TableSchemaVersion tableSchemaVersion,
             String              eventType,
-            Long eventPosition)  throws TableMapException {
+            Long eventPosition,
+            Long rowBinlogPositionTimestamp)  throws TableMapException {
 
         this.rowBinlogEventOrdinal = rowOrdinal;
         this.binlogFileName = binlogFileName;
@@ -84,7 +86,12 @@ public class AugmentedRow {
         initTableSchema(tableSchemaVersion);
 
         rowBinlogPositionID = String.format("%s:%020d:%020d", this.binlogFileName, eventPosition, this.rowBinlogEventOrdinal);
-        rowUUID = UUID.randomUUID().toString();;
+        rowUUID = UUID.randomUUID().toString();
+        this.rowBinlogPositionTimestamp = rowBinlogEventOrdinal;
+    }
+
+    public Long getRowBinlogPositionTimestamp() {
+        return rowBinlogPositionTimestamp;
     }
 
     /**

@@ -24,6 +24,7 @@ public class RawBinlogEvent_Delete extends RawBinlogEvent_Rows {
 
     public RawBinlogEvent_Delete(Object event) throws Exception {
         super(event);
+        extractedRows = this.extractRowsFromEvent();
     }
 
     public int getColumnCount() {

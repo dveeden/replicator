@@ -232,11 +232,11 @@ public class HBaseApplier implements Applier {
         if (configuration.isWriteRecentChangesToDeltaTables()) {
 
             //String replicantSchema = ((TableMapEvent) event).getDatabaseName().toString();
-            String mysqlTableName = ((TableMapEvent) event).getTableName().toString();
+            String mysqlTableName = event.getTableName();
 
             if (configuration.getTablesForWhichToTrackDailyChanges().contains(mysqlTableName)) {
 
-                long eventTimestampMicroSec = event.getHeader().getTimestamp();
+                long eventTimestampMicroSec = event.getTimestamp();
 
                 String deltaTableName = TableNameMapper.getCurrentDeltaTableName(
                         eventTimestampMicroSec,

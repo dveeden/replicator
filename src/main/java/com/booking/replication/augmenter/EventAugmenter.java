@@ -139,7 +139,7 @@ public class EventAugmenter {
                 break;
             case DELETE_ROWS_EVENT:
                 RawBinlogEvent_Delete deleteRowsEvent = ((RawBinlogEvent_Delete) event);
-                au = augmentDeleteRowsEventV2(deleteRowsEvent, caller);
+                au = augmentDeleteRowsEvent(deleteRowsEvent, caller);
                 break;
             default:
                 throw new TableMapException("RBR event type expected! Received type: " + event.getEventType().toString(), event);
@@ -185,7 +185,8 @@ public class EventAugmenter {
                     tableName,
                     tableSchemaVersion,
                     evType,
-                    writeRowsEvent.getPosition()
+                    writeRowsEvent.getPosition(),
+                    writeRowsEvent.getTimestamp()
             );
 
             tableMetrics.inserted.inc();
@@ -245,7 +246,8 @@ public class EventAugmenter {
                     tableName,
                     tableSchemaVersion,
                     evType,
-                    deleteRowsEvent.getPosition()
+                    deleteRowsEvent.getPosition(),
+                    deleteRowsEvent.getTimestamp()
             );
 
             //column index counting starts with 1
@@ -267,68 +269,6 @@ public class EventAugmenter {
 
             tableMetrics.processed.inc();
             tableMetrics.deleted.inc();
-        }
-
-        return augEventGroup;
-    }
-
-    // For now this is the same as for V1 event.
-    private AugmentedRowsEvent augmentDeleteRowsEventV2(
-            RawBinlogEvent_Delete deleteRowsEvent,
-            PipelineOrchestrator caller) throws TableMapException {
-        // table name
-        String tableName = caller.currentTransactionMetadata.getTableNameFromID(deleteRowsEvent.getTableId());
-
-        PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
-
-        // getValue schema for that table from activeSchemaVersion
-        TableSchemaVersion tableSchemaVersion = activeSchemaVersion.getActiveSchemaTables().get(tableName);
-
-        // TODO: refactor
-        if (tableSchemaVersion == null) {
-            throw new TableMapException("Table schema not initialized for table " + tableName + ". Cant proceed.", deleteRowsEvent);
-        }
-
-        AugmentedRowsEvent augEventGroup = new AugmentedRowsEvent(deleteRowsEvent);
-        augEventGroup.setMysqlTableName(tableName);
-
-        int numberOfColumns = deleteRowsEvent.getColumnCount();
-
-        long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-        for (Row row : deleteRowsEvent.getExtractedRows()) {
-
-            String evType = "DELETE";
-            rowBinlogEventOrdinal++;
-
-            AugmentedRow augEvent = new AugmentedRow(
-                    augEventGroup.getBinlogFileName(),
-                    rowBinlogEventOrdinal,
-                    tableName,
-                    tableSchemaVersion,
-                    evType,
-                    deleteRowsEvent.getPosition()
-            );
-
-            //column index counting starts with 1
-            for (int columnIndex = 1; columnIndex <= numberOfColumns ; columnIndex++ ) {
-
-                String columnName = tableSchemaVersion.getColumnIndexToNameMap().get(columnIndex);
-
-                // but here index goes from 0..
-                Cell columnValue = row.getRowCells().get(columnIndex - 1);
-
-                // We need schema for proper type casting
-                ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
-
-                String value = Converter.cellValueToString(columnValue, columnSchema);
-
-                // TODO: delete has same content as insert, but add a differently named method for clarity
-                augEvent.addColumnDataForInsert(columnName, value, columnSchema.getColumnType());
-            }
-            augEventGroup.addSingleRowEvent(augEvent);
-
-            tableMetrics.deleted.inc();
-            tableMetrics.processed.inc();
         }
 
         return augEventGroup;
@@ -368,7 +308,8 @@ public class EventAugmenter {
                 tableName,
                 tableSchemaVersion,
                 evType,
-                upEvent.getPosition()
+                upEvent.getPosition(),
+                upEvent.getTimestamp()
             );
 
             //column index counting starts with 1 for name tracking
@@ -400,81 +341,6 @@ public class EventAugmenter {
         return augEventGroup;
     }
 
-    // For now this is the same as V1. Not sure if the extra info in V2 can be of use to us.
-    private AugmentedRowsEvent augmentUpdateRowsEventV2(RawBinlogEvent_Update upEvent, PipelineOrchestrator caller) throws TableMapException {
-
-        // table name
-        String tableName = caller.currentTransactionMetadata.getTableNameFromID(upEvent.getTableId());
-
-        PerTableMetrics tableMetrics = PerTableMetrics.get(tableName);
-
-        // getValue schema for that table from activeSchemaVersion
-        TableSchemaVersion tableSchemaVersion = activeSchemaVersion.getActiveSchemaTables().get(tableName);
-
-        // TODO: refactor
-        if (tableSchemaVersion == null) {
-            throw new TableMapException("Table schema not initialized for table " + tableName + ". Cant proceed.", upEvent);
-        }
-
-        AugmentedRowsEvent augEventGroup = new AugmentedRowsEvent(upEvent);
-        augEventGroup.setMysqlTableName(tableName);
-
-        int numberOfColumns = upEvent.getColumnCount();
-
-        long rowBinlogEventOrdinal = 0; // order of the row in the binlog event
-
-        // rowPair is pair <rowBeforeChange, rowAfterChange>
-        for (Pair<com.google.code.or.common.glossary.Row> rowPair : upEvent.getRows()) {
-
-            String evType = "UPDATE";
-            rowBinlogEventOrdinal++;
-
-            AugmentedRow augEvent = new AugmentedRow(
-                augEventGroup.getBinlogFileName(),
-                rowBinlogEventOrdinal,
-                tableName,
-                    tableSchemaVersion,
-                evType,
-                upEvent.getHeader()
-            );
-
-            //column index for name tracking starts with 1
-            for (int columnIndex = 1; columnIndex <= numberOfColumns ; columnIndex++ ) {
-
-                String columnName = tableSchemaVersion.getColumnIndexToNameMap().get(columnIndex);
-
-                if (columnName == null) {
-                    LOGGER.error("null columnName for { columnIndex => " + columnIndex + ", tableName => " + tableName + " }" );
-                    throw new TableMapException("columnName cant be null", upEvent);
-                }
-
-                // but here index goes from 0..
-                Column columnValueBefore = rowPair.getBefore().getColumns().get(columnIndex - 1);
-                Column columnValueAfter = rowPair.getAfter().getColumns().get(columnIndex - 1);
-
-                // We need schema for proper type casting
-                ColumnSchema columnSchema = tableSchemaVersion.getColumnSchemaByColumnName(columnName);
-
-                try {
-                    String valueBefore = Converter.cellValueToString(columnValueBefore, columnSchema);
-                    String valueAfter  = Converter.cellValueToString(columnValueAfter, columnSchema);
-                    String columnType  = columnSchema.getColumnType();
-
-                    augEvent.addColumnDataForUpdate(columnName, valueBefore, valueAfter, columnType);
-                } catch (TableMapException e) {
-                    TableMapException rethrow = new TableMapException(e.getMessage(), upEvent);
-                    rethrow.setStackTrace(e.getStackTrace());
-                    throw rethrow;
-                }
-            }
-            augEventGroup.addSingleRowEvent(augEvent);
-
-            tableMetrics.processed.inc();
-            tableMetrics.updated.inc();
-        }
-        return augEventGroup;
-    }
-
     private static class PerTableMetrics {
         private static String prefix = "mysql";
         private static HashMap<String, PerTableMetrics> tableMetricsHash = new HashMap<>();
@@ -500,5 +366,4 @@ public class EventAugmenter {
             committed   = Metrics.registry.counter(name(prefix, tableName, "committed"));
         }
     }
-
 }
