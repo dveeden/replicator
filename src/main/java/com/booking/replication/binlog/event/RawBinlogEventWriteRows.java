@@ -42,7 +42,12 @@ public class RawBinlogEventWriteRows extends RawBinlogEventRows {
 
     public long getTableId() {
         if (this.USING_DEPRECATED_PARSER) {
-            return ((WriteRowsEvent) binlogEventV4).getTableId();
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.WRITE_ROWS_EVENT) {
+                return ((WriteRowsEvent) binlogEventV4).getTableId();
+            }
+            else {
+                return ((WriteRowsEventV2) binlogEventV4).getTableId();
+            }
         }
         else {
             return ((WriteRowsEventData) binlogConnectorEvent.getData()).getTableId();
@@ -58,14 +63,27 @@ public class RawBinlogEventWriteRows extends RawBinlogEventRows {
         List<Row> rows = new ArrayList();
 
         if (this.USING_DEPRECATED_PARSER) {
-            for (com.google.code.or.common.glossary.Row orRow : ((WriteRowsEventV2) binlogEventV4).getRows()) {
-                List<Cell> cells = new ArrayList<>();
-                for (Column column: orRow.getColumns()) {
-                    Cell cell = CellExtractor.extractCellFromOpenReplicatorColumn(column);
-                    cells.add(cell);
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.WRITE_ROWS_EVENT) {
+                for (com.google.code.or.common.glossary.Row orRow : ((WriteRowsEvent) binlogEventV4).getRows()) {
+                    List<Cell> cells = new ArrayList<>();
+                    for (Column column : orRow.getColumns()) {
+                        Cell cell = CellExtractor.extractCellFromOpenReplicatorColumn(column);
+                        cells.add(cell);
+                    }
+                    Row row = new Row(cells);
+                    rows.add(row);
                 }
-                Row row = new Row(cells);
-                rows.add(row);
+            }
+            else {
+                for (com.google.code.or.common.glossary.Row orRow : ((WriteRowsEventV2) binlogEventV4).getRows()) {
+                    List<Cell> cells = new ArrayList<>();
+                    for (Column column : orRow.getColumns()) {
+                        Cell cell = CellExtractor.extractCellFromOpenReplicatorColumn(column);
+                        cells.add(cell);
+                    }
+                    Row row = new Row(cells);
+                    rows.add(row);
+                }
             }
             return rows;
         }

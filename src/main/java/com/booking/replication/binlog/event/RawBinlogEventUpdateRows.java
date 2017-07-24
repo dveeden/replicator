@@ -6,9 +6,11 @@ import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.common.RowPair;
 import com.github.shyiko.mysql.binlog.event.UpdateRowsEventData;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
+import com.google.code.or.binlog.impl.event.UpdateRowsEvent;
 import com.google.code.or.binlog.impl.event.UpdateRowsEventV2;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
 import com.google.code.or.common.glossary.Column;
+import com.google.code.or.common.util.MySQLConstants;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -30,7 +32,12 @@ public class RawBinlogEventUpdateRows extends RawBinlogEventRows {
 
     public int getColumnCount() {
         if (this.binlogEventV4 != null) {
-            return ((WriteRowsEvent) binlogEventV4).getColumnCount().intValue();
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.UPDATE_ROWS_EVENT) {
+                return ((UpdateRowsEvent) binlogEventV4).getColumnCount().intValue();
+            }
+            else {
+                return ((UpdateRowsEventV2) binlogEventV4).getColumnCount().intValue();
+            }
         }
         else {
             BitSet includedColumns = ((UpdateRowsEventData) binlogConnectorEvent.getData()).getIncludedColumns();
@@ -40,10 +47,15 @@ public class RawBinlogEventUpdateRows extends RawBinlogEventRows {
 
     public long getTableId() {
         if (this.binlogEventV4 != null) {
-            return ((WriteRowsEvent) binlogEventV4).getTableId();
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.UPDATE_ROWS_EVENT) {
+                return ((UpdateRowsEvent) binlogEventV4).getTableId();
+            }
+            else {
+                return ((UpdateRowsEventV2) binlogEventV4).getTableId();
+            }
         }
         else {
-            return ((WriteRowsEventData) binlogConnectorEvent.getData()).getTableId();
+            return ((UpdateRowsEventData) binlogConnectorEvent.getData()).getTableId();
         }
     }
 
@@ -57,37 +69,64 @@ public class RawBinlogEventUpdateRows extends RawBinlogEventRows {
 
             List<RowPair> pairs = new ArrayList<>();
 
-            for (com.google.code.or.common.glossary.Pair rowPair : ((UpdateRowsEventV2) binlogEventV4).getRows()) {
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.UPDATE_ROWS_EVENT) {
+                for (com.google.code.or.common.glossary.Pair rowPair : ((UpdateRowsEvent) binlogEventV4).getRows()) {
 
-                int numberOfColumns = getColumnCount();
+                    int numberOfColumns = getColumnCount();
 
-                List<Cell> cellsBefore = new ArrayList<>();
-                List<Cell> cellsAfter = new ArrayList<>();
+                    List<Cell> cellsBefore = new ArrayList<>();
+                    List<Cell> cellsAfter = new ArrayList<>();
 
-                for (int columnIndex = 0; columnIndex < numberOfColumns; columnIndex++) {
+                    for (int columnIndex = 0; columnIndex < numberOfColumns; columnIndex++) {
 
-                    // but here index goes from 0..
-                    Column columnValueBefore = ((com.google.code.or.common.glossary.Row) rowPair.getBefore()).getColumns().get(columnIndex);
-                    Column columnValueAfter = ((com.google.code.or.common.glossary.Row) rowPair.getAfter()).getColumns().get(columnIndex);
+                        // but here index goes from 0..
+                        Column columnValueBefore = ((com.google.code.or.common.glossary.Row) rowPair.getBefore()).getColumns().get(columnIndex);
+                        Column columnValueAfter = ((com.google.code.or.common.glossary.Row) rowPair.getAfter()).getColumns().get(columnIndex);
 
-                    Cell cellBefore = CellExtractor.extractCellFromOpenReplicatorColumn(columnValueBefore);
-                    Cell cellAfter = CellExtractor.extractCellFromOpenReplicatorColumn(columnValueAfter);
+                        Cell cellBefore = CellExtractor.extractCellFromOpenReplicatorColumn(columnValueBefore);
+                        Cell cellAfter = CellExtractor.extractCellFromOpenReplicatorColumn(columnValueAfter);
 
-                    cellsBefore.add(cellBefore);
-                    cellsAfter.add(cellAfter);
+                        cellsBefore.add(cellBefore);
+                        cellsAfter.add(cellAfter);
+                    }
+
+                    Row rowBefore = new Row(cellsBefore);
+                    Row rowAfter = new Row(cellsAfter);
+
+                    pairs.add(new RowPair(rowBefore, rowAfter));
                 }
+            }
+            else {
+                for (com.google.code.or.common.glossary.Pair rowPair : ((UpdateRowsEventV2) binlogEventV4).getRows()) {
 
-                Row rowBefore = new Row(cellsBefore);
-                Row rowAfter = new Row(cellsAfter);
+                    int numberOfColumns = getColumnCount();
 
-                pairs.add(new RowPair(rowBefore, rowAfter));
+                    List<Cell> cellsBefore = new ArrayList<>();
+                    List<Cell> cellsAfter = new ArrayList<>();
+
+                    for (int columnIndex = 0; columnIndex < numberOfColumns; columnIndex++) {
+
+                        // but here index goes from 0..
+                        Column columnValueBefore = ((com.google.code.or.common.glossary.Row) rowPair.getBefore()).getColumns().get(columnIndex);
+                        Column columnValueAfter = ((com.google.code.or.common.glossary.Row) rowPair.getAfter()).getColumns().get(columnIndex);
+
+                        Cell cellBefore = CellExtractor.extractCellFromOpenReplicatorColumn(columnValueBefore);
+                        Cell cellAfter = CellExtractor.extractCellFromOpenReplicatorColumn(columnValueAfter);
+
+                        cellsBefore.add(cellBefore);
+                        cellsAfter.add(cellAfter);
+                    }
+
+                    Row rowBefore = new Row(cellsBefore);
+                    Row rowAfter = new Row(cellsAfter);
+
+                    pairs.add(new RowPair(rowBefore, rowAfter));
+                }
             }
             return pairs;
         }
         else {
-            // TODO: extract RowPairs from binlog connector row format
-
-            // we have a List<Map.Entry<Serializable[], Serializable[]>>
+            // For binlog connector we have a List<Map.Entry<Serializable[], Serializable[]>>
             // where one row is Map.Entry<Serializable[], Serializable[]>
             // TODO: verify:
             //      ? column ordering ?

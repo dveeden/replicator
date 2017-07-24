@@ -30,7 +30,12 @@ public class RawBinlogEventDeleteRows extends RawBinlogEventRows {
 
     public int getColumnCount() {
         if (this.binlogEventV4 != null) {
-            return ((WriteRowsEvent) binlogEventV4).getColumnCount().intValue();
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.DELETE_ROWS_EVENT) {
+                return ((DeleteRowsEvent) binlogEventV4).getColumnCount().intValue();
+            }
+            else {
+                return ((DeleteRowsEventV2) binlogEventV4).getColumnCount().intValue();
+            }
         }
         else {
             BitSet includedColumns = ((DeleteRowsEventData) binlogConnectorEvent.getData()).getIncludedColumns();
@@ -40,10 +45,15 @@ public class RawBinlogEventDeleteRows extends RawBinlogEventRows {
 
     public long getTableId() {
         if (this.binlogEventV4 != null) {
-            return ((WriteRowsEvent) binlogEventV4).getTableId();
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.DELETE_ROWS_EVENT) {
+                return ((DeleteRowsEvent) binlogEventV4).getTableId();
+            }
+            else {
+                return ((DeleteRowsEventV2) binlogEventV4).getTableId();
+            }
         }
         else {
-            return ((WriteRowsEventData) binlogConnectorEvent.getData()).getTableId();
+            return ((DeleteRowsEventData) binlogConnectorEvent.getData()).getTableId();
         }
     }
 

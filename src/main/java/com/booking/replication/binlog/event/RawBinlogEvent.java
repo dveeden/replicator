@@ -74,7 +74,7 @@ public class RawBinlogEvent {
     }
 
     public long getTimestampOfReceipt() {
-       return this.getTimestampOfReceipt();
+       return timestampOfReceipt;
     }
 
     // timestamp received from OpenReplicator is in millisecond form,
