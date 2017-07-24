@@ -1,5 +1,6 @@
 package com.booking.replication.pipeline;
 
+import com.booking.replication.binlog.EventPosition;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.sql.QueryInspector;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -46,12 +47,8 @@ public class CurrentTransactionMetadata {
 
     @Override
     public String toString() {
-        String beginEventBinlogFilename = null;
-        Long beginEventBinlogPosition = null;
-        if (beginEvent != null) {
-            beginEventBinlogFilename = beginEvent.getBinlogFilename();
-            beginEventBinlogPosition = beginEvent.getHeader().getPosition();
-        }
+        String beginEventBinlogFilename = beginEvent == null ? null : EventPosition.getEventBinlogFileName(beginEvent);
+        Long beginEventBinlogPosition = beginEvent == null ? null : EventPosition.getEventBinlogPosition(beginEvent);
         return "uuid: " + uuid +
                 ", xid: " + xid +
                 ", tableID2Name: " + tableID2Name +
@@ -118,6 +115,11 @@ public class CurrentTransactionMetadata {
 
     public Queue<BinlogEventV4> getEvents() {
         return events;
+    }
+
+    public void clearEvents() {
+        events = new LinkedList<>();
+        eventsCounter = 0;
     }
 
     public void doTimestampOverride(long timestamp) {

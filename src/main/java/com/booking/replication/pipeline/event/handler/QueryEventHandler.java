@@ -8,6 +8,7 @@ import com.booking.replication.applier.HBaseApplier;
 import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
+import com.booking.replication.binlog.EventPosition;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.BinlogEventProducerException;
 import com.booking.replication.pipeline.CurrentTransactionMetadata;
@@ -73,11 +74,6 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                             event.getHeader().getTimestamp()
                     );
 
-                    String currentBinlogFileName =
-                            pipelinePosition.getCurrentPosition().getBinlogFilename();
-
-                    long currentBinlogPosition = event.getHeader().getPosition();
-
                     String pseudoGTID = pipelinePosition.getCurrentPseudoGTID();
                     String pseudoGTIDFullQuery = pipelinePosition.getCurrentPseudoGTIDFullQuery();
                     int currentSlaveId = pipelinePosition.getCurrentPosition().getServerID();
@@ -85,8 +81,8 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                     LastCommittedPositionCheckpoint marker = new LastCommittedPositionCheckpoint(
                             pipelinePosition.getCurrentPosition().getHost(),
                             currentSlaveId,
-                            currentBinlogFileName,
-                            currentBinlogPosition,
+                            EventPosition.getEventBinlogFileName(event),
+                            EventPosition.getEventBinlogPosition(event),
                             pseudoGTID,
                             pseudoGTIDFullQuery,
                             pipelineOrchestrator.getFakeMicrosecondCounter()

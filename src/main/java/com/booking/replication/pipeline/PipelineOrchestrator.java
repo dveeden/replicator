@@ -7,6 +7,7 @@ import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
 import com.booking.replication.applier.HBaseApplier;
 import com.booking.replication.augmenter.EventAugmenter;
+import com.booking.replication.binlog.EventPosition;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.event.handler.*;
 import com.booking.replication.queues.ReplicatorQueues;
@@ -31,7 +32,6 @@ import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.function.BiFunction;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -241,15 +241,18 @@ public class PipelineOrchestrator extends Thread {
         }
     }
 
-    private void processQueueLoop(BiFunction<String, Long, Boolean> exitCondition) throws Exception {
+    private void processQueueLoop(BinlogPositionInfo exitOnBinlogPosition) throws Exception {
         while (isRunning()) {
-            if (!processQueue(exitCondition)) {
+            if (!processQueue(exitOnBinlogPosition)) {
                 break;
+            }
+            if (isRewinding) {
+                applyTransactionDataEvents();
             }
         }
     }
 
-    private boolean processQueue(BiFunction<String, Long, Boolean> exitCondition) throws Exception {
+    private boolean processQueue(BinlogPositionInfo exitOnBinlogPosition) throws Exception {
 
         BinlogEventV4 event = waitForEvent();
         LOGGER.debug("Received event: " + event);
@@ -259,29 +262,27 @@ public class PipelineOrchestrator extends Thread {
 
         // Update pipeline position
         fakeMicrosecondCounter++;
-        pipelinePosition.updatCurrentPipelinePosition(
+        pipelinePosition.updateCurrentPipelinePosition(
                 replicantPool.getReplicantDBActiveHost(),
                 replicantPool.getReplicantDBActiveHostServerID(),
                 event,
                 fakeMicrosecondCounter
         );
 
-
         if (skipEvent(event)) {
             LOGGER.debug("Skipping event: " + event);
             eventsSkippedCounter.mark();
-        } else if (exitCondition != null) {
-            AbstractBinlogEventV4 abstractBinlogEventV4 = (AbstractBinlogEventV4) event;
-            if (abstractBinlogEventV4 != null && exitCondition.apply(abstractBinlogEventV4.getBinlogFilename(), abstractBinlogEventV4.getHeader().getPosition())) {
-                return false;
-            }
         } else {
             LOGGER.debug("Processing event: " + event);
             calculateAndPropagateChanges(event);
             eventsProcessedCounter.mark();
         }
 
-        return true;
+        BinlogPositionInfo currentPosition = new BinlogPositionInfo(replicantPool.getReplicantDBActiveHostServerID(),
+                EventPosition.getEventBinlogFileName(event), EventPosition.getEventBinlogPosition(event));
+        LOGGER.info("exit:" + exitOnBinlogPosition);
+        LOGGER.info("curr:" + currentPosition);
+        return exitOnBinlogPosition == null || BinlogPositionInfo.compare(exitOnBinlogPosition, currentPosition) != 0;
     }
 
     private BinlogEventV4 rewindToEventType(String type) throws ApplierException, IOException, InterruptedException {
@@ -299,8 +300,7 @@ public class PipelineOrchestrator extends Thread {
 
             LOGGER.debug("Skipping event due to rewinding: " + event);
         }
-        AbstractBinlogEventV4 abstractBinlogEventV4 = (AbstractBinlogEventV4) resultEvent;
-        LOGGER.debug("Rewinded to the event: " + resultEvent + " position: " + abstractBinlogEventV4.getBinlogFilename() + ":" + resultEvent.getHeader().getPosition());
+        LOGGER.debug("Rewinded to the position: " + EventPosition.getEventBinlogFileNameAndPosition(resultEvent) + ", event: " + resultEvent);
         return resultEvent;
     }
 
@@ -409,7 +409,7 @@ public class PipelineOrchestrator extends Thread {
         try {
             eventDispatcher.handle(event);
         } catch (TransactionSizeLimitException e) {
-            // TODO: check
+            LOGGER.info("Transaction size limit(" + TRANSACTION_SIZE_LIMIT + ") exceeded. Applying with rewinding xid: " + currentTransactionMetadata.getXid());
             applyTransactionWithRewinding(currentTransactionMetadata.getBeginEvent());
         } catch (TransactionException e) {
             LOGGER.error("EventManger failed to handle event: ", e);
@@ -429,8 +429,6 @@ public class PipelineOrchestrator extends Thread {
      * @return shouldSkip Weather event should be skipped or processed
      */
     public boolean skipEvent(BinlogEventV4 event) throws Exception {
-        boolean eventIsTracked      = false;
-
         // if there is a last safe checkpoint, skip events that are before
         // or equal to it, so that the same events are not writen multiple
         // times (beside wasting IO, this would fail the DDL operations,
@@ -513,9 +511,7 @@ public class PipelineOrchestrator extends Thread {
 
             // TableMap event:
             case MySQLConstants.TABLE_MAP_EVENT:
-                eventIsTracked = isReplicant(((TableMapEvent) event).getDatabaseName().toString());
-                break;
-
+                return !isReplicant(((TableMapEvent) event).getDatabaseName().toString());
             // Data event:
             case MySQLConstants.UPDATE_ROWS_EVENT:
             case MySQLConstants.UPDATE_ROWS_EVENT_V2:
@@ -523,9 +519,7 @@ public class PipelineOrchestrator extends Thread {
             case MySQLConstants.WRITE_ROWS_EVENT_V2:
             case MySQLConstants.DELETE_ROWS_EVENT:
             case MySQLConstants.DELETE_ROWS_EVENT_V2:
-                eventIsTracked = currentTransactionMetadata.getFirstMapEventInTransaction() != null;
-                break;
-
+                return currentTransactionMetadata.getFirstMapEventInTransaction() == null;
             case MySQLConstants.XID_EVENT:
 //                if (!currentTransactionMetadata.hasMappingInTransaction()) {
 //                    if (currentTransactionMetadata.getEvents().size() == 0) {
@@ -558,28 +552,17 @@ public class PipelineOrchestrator extends Thread {
                 String currentBinlogFile =
                         pipelinePosition.getCurrentPosition().getBinlogFilename();
                 if (rotateEventAllreadySeenForBinlogFile.containsKey(currentBinlogFile)) {
-                    eventIsTracked = false;
-                } else {
-                    eventIsTracked = true;
-                    rotateEventAllreadySeenForBinlogFile.put(currentBinlogFile, true);
+                    return true;
                 }
-                break;
-
+                rotateEventAllreadySeenForBinlogFile.put(currentBinlogFile, true);
+                return false;
             case MySQLConstants.FORMAT_DESCRIPTION_EVENT:
-                eventIsTracked = true;
-                break;
-
             case MySQLConstants.STOP_EVENT:
-                eventIsTracked = true;
-                break;
-
+                return false;
             default:
-                eventIsTracked = false;
                 LOGGER.warn("Unexpected event type => " + event.getHeader().getEventType());
-                break;
+                return true;
         }
-
-        return !eventIsTracked;
     }
 
     public boolean beginTransaction() {
@@ -588,6 +571,7 @@ public class PipelineOrchestrator extends Thread {
             return false;
         }
         currentTransactionMetadata = new CurrentTransactionMetadata();
+        LOGGER.debug("Started transaction " + currentTransactionMetadata.getUuid() + " without event");
         return true;
     }
 
@@ -597,6 +581,7 @@ public class PipelineOrchestrator extends Thread {
             return false;
         }
         currentTransactionMetadata = new CurrentTransactionMetadata(event);
+        LOGGER.debug("Started transaction " + currentTransactionMetadata.getUuid() + " with event: " + event);
         return true;
     }
 
@@ -605,12 +590,11 @@ public class PipelineOrchestrator extends Thread {
             throw new TransactionException("Failed to add new event into a transaction buffer while not in transaction: " + event);
         }
         if (isTransactionSizeLimitExceeded()) {
-            // TODO: what next?
             throw new TransactionSizeLimitException();
         }
         currentTransactionMetadata.addEvent(event);
         if (currentTransactionMetadata.getEventsCounter() % 10 == 0) {
-            LOGGER.info("Number of events in current transaction " + currentTransactionMetadata.getUuid() + " is: " + currentTransactionMetadata.getEventsCounter());
+            LOGGER.debug("Number of events in current transaction " + currentTransactionMetadata.getUuid() + " is: " + currentTransactionMetadata.getEventsCounter());
         }
     }
 
@@ -634,15 +618,13 @@ public class PipelineOrchestrator extends Thread {
         try {
             binlogEventProducer.stopAndClearQueue(10000, TimeUnit.MILLISECONDS);
             binlogEventProducer.setBinlogFileName(oldBeginEvent.getBinlogFilename());
-            binlogEventProducer.setBinlogPosition(oldBeginEvent.getHeader().getPosition());
+            binlogEventProducer.setBinlogPosition(oldBeginEvent.getHeader().getNextPosition());
             binlogEventProducer.start();
         } catch (Exception e) {
             throw new BinlogEventProducerException("Can't stop binlogEventProducer to rewind a stream to the end of a transaction: ");
         }
         // TODO: no applying happens
-        processQueueLoop(
-                (String binlogFilename, Long binlogPosition) -> xidEvent.getBinlogFilename().equals(binlogFilename)
-                        && Long.compare(xidEvent.getHeader().getPosition(), binlogPosition) == 0);
+        processQueueLoop(new BinlogPositionInfo(replicantPool.getReplicantDBActiveHostServerID(), xidEvent.getBinlogFilename(), xidEvent.getHeader().getPosition()));
 
         isRewinding = false;
 
@@ -675,28 +657,46 @@ public class PipelineOrchestrator extends Thread {
         // apply all the buffered events
         LOGGER.debug("Committing transaction uuid: " + currentTransactionMetadata.getUuid() + ", id: " + currentTransactionMetadata.getXid());
         // apply changes from buffer and pass current metadata with xid and uuid
-        if (isEmptyTransaction()) {
-            LOGGER.debug("Transaction is empty");
-            dropTransaction();
-        } else {
-            try {
-                // apply begin event
-                if (currentTransactionMetadata.hasBeginEvent()) {
-                    eventDispatcher.apply(currentTransactionMetadata.getBeginEvent(), currentTransactionMetadata);
+
+        try {
+            if (isRewinding) {
+                applyTransactionFinishEvent();
+            } else {
+                if (isEmptyTransaction()) {
+                    LOGGER.debug("Transaction is empty");
+                    dropTransaction();
+                    return;
                 }
-                // apply data-changing events
-                for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
-                    eventDispatcher.apply(event, currentTransactionMetadata);
-                }
-                // apply commit event
-                if (currentTransactionMetadata.hasFinishEvent()) {
-                    eventDispatcher.apply(currentTransactionMetadata.getFinishEvent(), currentTransactionMetadata);
-                }
-            } catch (EventHandlerApplyException e) {
-                LOGGER.error("Failed to commit transaction: " + currentTransactionMetadata, e);
-                requestShutdown();
+                applyTransactionBeginEvent();
+                applyTransactionDataEvents();
+                applyTransactionFinishEvent();
             }
-            currentTransactionMetadata = null;
+        } catch (EventHandlerApplyException e) {
+            LOGGER.error("Failed to commit transaction: " + currentTransactionMetadata, e);
+            requestShutdown();
+        }
+        currentTransactionMetadata = null;
+    }
+
+    private void applyTransactionBeginEvent() throws EventHandlerApplyException {
+        // apply begin event
+        if (currentTransactionMetadata.hasBeginEvent()) {
+            eventDispatcher.apply(currentTransactionMetadata.getBeginEvent(), currentTransactionMetadata);
+        }
+    }
+
+    private void applyTransactionDataEvents() throws EventHandlerApplyException {
+        // apply data-changing events
+        for (BinlogEventV4 event : currentTransactionMetadata.getEvents()) {
+            eventDispatcher.apply(event, currentTransactionMetadata);
+        }
+        currentTransactionMetadata.clearEvents();
+    }
+
+    private void applyTransactionFinishEvent() throws EventHandlerApplyException {
+        // apply commit event
+        if (currentTransactionMetadata.hasFinishEvent()) {
+            eventDispatcher.apply(currentTransactionMetadata.getFinishEvent(), currentTransactionMetadata);
         }
     }
 
