@@ -6,8 +6,8 @@ import com.google.code.or.binlog.impl.event.RotateEvent;
 /**
  * Created by bosko on 5/22/17.
  */
-public class RawBinlogEvent_Rotate extends RawBinlogEvent {
-    public RawBinlogEvent_Rotate(Object event) throws Exception {
+public class RawBinlogEventRotate extends RawBinlogEvent {
+    public RawBinlogEventRotate(Object event) throws Exception {
         super(event);
     }
 

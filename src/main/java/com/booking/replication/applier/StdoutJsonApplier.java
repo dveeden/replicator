@@ -4,10 +4,10 @@ import com.booking.replication.Configuration;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.binlog.event.RawBinlogEvent_FormatDescription;
-import com.booking.replication.binlog.event.RawBinlogEvent_Rotate;
-import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
-import com.booking.replication.binlog.event.RawBinlogEvent_Xid;
+import com.booking.replication.binlog.event.RawBinlogEventFormatDescription;
+import com.booking.replication.binlog.event.RawBinlogEventRotate;
+import com.booking.replication.binlog.event.RawBinlogEventTableMap;
+import com.booking.replication.binlog.event.RawBinlogEventXid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import org.slf4j.Logger;
@@ -34,7 +34,7 @@ public class StdoutJsonApplier implements Applier  {
     public StdoutJsonApplier(Configuration configuration) {}
 
     @Override
-    public void applyXidEvent(RawBinlogEvent_Xid event) {
+    public void applyXidEvent(RawBinlogEventXid event) {
         if (VERBOSE) {
             for (String table : stats.keySet()) {
                 LOGGER.info("XID Event, current stats: { table => " + table + ", rows => " + stats.get(table));
@@ -143,18 +143,18 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
-    public void applyRotateEvent(RawBinlogEvent_Rotate event) {
+    public void applyRotateEvent(RawBinlogEventRotate event) {
         LOGGER.info("binlog rotate: " + event.getBinlogFilename());
         LOGGER.info("STDOUTApplier totalRowsCounter => " + totalRowsCounter);
     }
 
     @Override
-    public void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event) {
+    public void applyFormatDescriptionEvent(RawBinlogEventFormatDescription event) {
 
     }
 
     @Override
-    public void applyTableMapEvent(RawBinlogEvent_TableMap event) {
+    public void applyTableMapEvent(RawBinlogEventTableMap event) {
 
     }
 }

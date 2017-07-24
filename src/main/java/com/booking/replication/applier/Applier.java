@@ -2,10 +2,10 @@ package com.booking.replication.applier;
 
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.binlog.event.RawBinlogEvent_FormatDescription;
-import com.booking.replication.binlog.event.RawBinlogEvent_Rotate;
-import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
-import com.booking.replication.binlog.event.RawBinlogEvent_Xid;
+import com.booking.replication.binlog.event.RawBinlogEventFormatDescription;
+import com.booking.replication.binlog.event.RawBinlogEventRotate;
+import com.booking.replication.binlog.event.RawBinlogEventTableMap;
+import com.booking.replication.binlog.event.RawBinlogEventXid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import java.io.IOException;
@@ -20,9 +20,9 @@ public interface Applier {
 
     void applyCommitQueryEvent();
 
-    void applyXidEvent(RawBinlogEvent_Xid event);
+    void applyXidEvent(RawBinlogEventXid event);
 
-    void applyRotateEvent(RawBinlogEvent_Rotate event) throws ApplierException, IOException;
+    void applyRotateEvent(RawBinlogEventRotate event) throws ApplierException, IOException;
 
     void applyAugmentedSchemaChangeEvent(
             AugmentedSchemaChangeEvent augmentedSchemaChangeEvent,
@@ -30,9 +30,9 @@ public interface Applier {
 
     void forceFlush() throws ApplierException, IOException;
 
-    void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event);
+    void applyFormatDescriptionEvent(RawBinlogEventFormatDescription event);
 
-    void applyTableMapEvent(RawBinlogEvent_TableMap event);
+    void applyTableMapEvent(RawBinlogEventTableMap event);
 
     void waitUntilAllRowsAreCommitted() throws IOException, ApplierException;
 

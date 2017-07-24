@@ -3,16 +3,13 @@ package com.booking.replication.binlog.event;
 import com.booking.replication.binlog.common.Cell;
 import com.booking.replication.binlog.common.CellExtractor;
 import com.booking.replication.binlog.common.Row;
-import com.booking.replication.binlog.common.cell.*;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
 import com.google.code.or.binlog.impl.event.WriteRowsEventV2;
 import com.google.code.or.common.glossary.Column;
-import com.google.code.or.common.glossary.column.*;
-import com.google.code.or.io.ExceedLimitException;
+import com.google.code.or.common.util.MySQLConstants;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -20,18 +17,22 @@ import java.util.List;
 /**
  * Created by bosko on 6/1/17.
  */
-public class RawBinlogEvent_Write extends RawBinlogEvent_Rows {
+public class RawBinlogEventWriteRows extends RawBinlogEventRows {
 
     List<Row> extractedRows;
 
-    public RawBinlogEvent_Write(Object event) throws Exception {
+    public RawBinlogEventWriteRows(Object event) throws Exception {
         super(event);
         extractedRows = this.extractRowsFromEvent();
     }
 
     public int getColumnCount() {
         if (this.USING_DEPRECATED_PARSER) {
-            return ((WriteRowsEvent) binlogEventV4).getColumnCount().intValue();
+            if (binlogEventV4.getHeader().getEventType() == MySQLConstants.WRITE_ROWS_EVENT) {
+                return ((WriteRowsEvent) binlogEventV4).getColumnCount().intValue();
+            } else {
+                return ((WriteRowsEventV2) binlogEventV4).getColumnCount().intValue();
+            }
         }
         else {
             BitSet includedColumns = ((WriteRowsEventData) binlogConnectorEvent.getData()).getIncludedColumns();

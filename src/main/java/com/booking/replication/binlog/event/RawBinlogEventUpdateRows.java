@@ -4,16 +4,11 @@ import com.booking.replication.binlog.common.Cell;
 import com.booking.replication.binlog.common.CellExtractor;
 import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.common.RowPair;
-import com.booking.replication.schema.column.ColumnSchema;
-import com.booking.replication.schema.column.types.Converter;
-import com.booking.replication.schema.exception.TableMapException;
 import com.github.shyiko.mysql.binlog.event.UpdateRowsEventData;
 import com.github.shyiko.mysql.binlog.event.WriteRowsEventData;
 import com.google.code.or.binlog.impl.event.UpdateRowsEventV2;
 import com.google.code.or.binlog.impl.event.WriteRowsEvent;
-import com.google.code.or.binlog.impl.event.WriteRowsEventV2;
 import com.google.code.or.common.glossary.Column;
-import com.google.code.or.common.glossary.Pair;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -24,11 +19,11 @@ import java.util.Map;
 /**
  * Created by bosko on 6/1/17.
  */
-public class RawBinlogEvent_Update extends RawBinlogEvent_Rows {
+public class RawBinlogEventUpdateRows extends RawBinlogEventRows {
 
     List<RowPair> extractedRows;
 
-    public RawBinlogEvent_Update(Object event) throws Exception {
+    public RawBinlogEventUpdateRows(Object event) throws Exception {
         super(event);
         this.extractedRows = this.extractRowsFromEvent();
     }

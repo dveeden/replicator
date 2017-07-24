@@ -6,9 +6,9 @@ import com.google.code.or.binlog.impl.event.TableMapEvent;
 /**
  * Created by bosko on 5/22/17.
  */
-public class RawBinlogEvent_TableMap extends RawBinlogEvent {
+public class RawBinlogEventTableMap extends RawBinlogEvent {
 
-    public RawBinlogEvent_TableMap(Object event) throws Exception {
+    public RawBinlogEventTableMap(Object event) throws Exception {
         super(event);
     }
 

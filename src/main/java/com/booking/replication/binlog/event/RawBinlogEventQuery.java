@@ -10,8 +10,8 @@ import java.util.HashMap;
 /**
  * Created by bosko on 5/22/17.
  */
-public class RawBinlogEvent_Query extends RawBinlogEvent {
-    public RawBinlogEvent_Query(Object event) throws Exception {
+public class RawBinlogEventQuery extends RawBinlogEvent {
+    public RawBinlogEventQuery(Object event) throws Exception {
         super(event);
     }
 

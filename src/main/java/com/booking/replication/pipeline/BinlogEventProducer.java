@@ -6,9 +6,7 @@ import com.booking.replication.Configuration;
 import com.booking.replication.Constants;
 import com.booking.replication.Metrics;
 
-import com.booking.replication.binlog.event.BinlogEventParserProviderCode;
-import com.booking.replication.binlog.event.BinlogEventParserProviderFactory;
-import com.booking.replication.binlog.event.RawBinlogEvent;
+import com.booking.replication.binlog.event.*;
 import com.booking.replication.replicant.ReplicantPool;
 
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
@@ -21,6 +19,7 @@ import com.google.code.or.binlog.BinlogEventV4;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
+import com.google.code.or.common.util.MySQLConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,6 +122,7 @@ public class BinlogEventProducer {
                             // or add push method that can accept multiple event types)
                             boolean added = false;
                             try {
+
                                 RawBinlogEvent rawBinlogEvent = new RawBinlogEvent(event);
 
                                 // binlog file name of the last red event. Inject in the
@@ -182,7 +182,43 @@ public class BinlogEventProducer {
                             backPressureSleep();
                             boolean added = false;
                             try {
-                                RawBinlogEvent rawBinlogEvent = new RawBinlogEvent(event);
+                                RawBinlogEvent rawBinlogEvent;
+                                switch (event.getHeader().getEventType()) {
+                                    // Check for DDL and pGTID:
+                                    case MySQLConstants.QUERY_EVENT:
+                                        rawBinlogEvent = new RawBinlogEventQuery(event);
+                                        break;
+                                    case MySQLConstants.TABLE_MAP_EVENT:
+                                        rawBinlogEvent = new RawBinlogEventTableMap(event);
+                                        break;
+                                    case MySQLConstants.UPDATE_ROWS_EVENT:
+                                    case MySQLConstants.UPDATE_ROWS_EVENT_V2:
+                                        rawBinlogEvent = new RawBinlogEventUpdateRows(event);
+                                        break;
+                                    case MySQLConstants.WRITE_ROWS_EVENT:
+                                    case MySQLConstants.WRITE_ROWS_EVENT_V2:
+                                        rawBinlogEvent = new RawBinlogEventWriteRows(event);
+                                        break;
+                                    case MySQLConstants.DELETE_ROWS_EVENT:
+                                    case MySQLConstants.DELETE_ROWS_EVENT_V2:
+                                        rawBinlogEvent = new RawBinlogEventDeleteRows(event);
+                                        break;
+                                    case MySQLConstants.XID_EVENT:
+                                        rawBinlogEvent = new RawBinlogEventXid(event);
+                                        break;
+                                    case MySQLConstants.FORMAT_DESCRIPTION_EVENT:
+                                        rawBinlogEvent = new RawBinlogEventFormatDescription(event);
+                                        break;
+                                    case MySQLConstants.ROTATE_EVENT:
+                                        rawBinlogEvent = new RawBinlogEventRotate(event);
+                                        break;
+                                    case MySQLConstants.STOP_EVENT:
+                                        rawBinlogEvent = new RawBinlogEventStop(event);
+                                        break;
+                                    default:
+                                        rawBinlogEvent = new RawBinlogEvent(event);
+                                        break;
+                                }
                                 added = rawBinlogEventQueue.offer(rawBinlogEvent, 100, TimeUnit.MILLISECONDS);
                             } catch (Exception e) {
                                 LOGGER.error("rawBinlogEventsQueue.offer failed ", e);

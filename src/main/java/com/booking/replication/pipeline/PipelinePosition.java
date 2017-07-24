@@ -1,7 +1,7 @@
 package com.booking.replication.pipeline;
 
 import com.booking.replication.binlog.event.RawBinlogEvent;
-import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.event.RawBinlogEventTableMap;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -162,7 +162,7 @@ public class PipelinePosition {
     public void updatePipelineLastMapEventPosition(
             String host,
             int serverID,
-            RawBinlogEvent_TableMap event,
+            RawBinlogEventTableMap event,
             long fakeMicrosecondCounter
     ) {
         if (this.getLastMapEventPosition() == null) {

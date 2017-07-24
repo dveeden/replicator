@@ -407,7 +407,7 @@ public class PipelineOrchestrator extends Thread {
 
             // TableMap event:
             case TABLE_MAP_EVENT:
-                String tableName = ((RawBinlogEvent_TableMap) event).getTableName();
+                String tableName = ((RawBinlogEventTableMap) event).getTableName();
 
                 if (tableName.equals(Constants.HEART_BEAT_TABLE)) {
                     // reset the fake microsecond counter on hearth beat event. In our case
@@ -425,19 +425,19 @@ public class PipelineOrchestrator extends Thread {
 
                 try {
 
-                    currentTransactionMetadata.updateCache((RawBinlogEvent_TableMap) event);
+                    currentTransactionMetadata.updateCache((RawBinlogEventTableMap) event);
 
-                    long tableID = ((RawBinlogEvent_TableMap) event).getTableId();
+                    long tableID = ((RawBinlogEventTableMap) event).getTableId();
                     String dbName = currentTransactionMetadata.getDBNameFromTableID(tableID);
-                    LOGGER.debug("processing events for { db => " + dbName + " table => " + ((RawBinlogEvent_TableMap) event).getTableName() + " } ");
+                    LOGGER.debug("processing events for { db => " + dbName + " table => " + ((RawBinlogEventTableMap) event).getTableName() + " } ");
                     LOGGER.debug("fakeMicrosecondCounter at tableMap event => " + fakeMicrosecondCounter);
 
-                    applier.applyTableMapEvent((RawBinlogEvent_TableMap) event);
+                    applier.applyTableMapEvent((RawBinlogEventTableMap) event);
 
                     this.pipelinePosition.updatePipelineLastMapEventPosition(
                         replicantPool.getReplicantDBActiveHost(),
                         replicantPool.getReplicantDBActiveHostServerID(),
-                        (RawBinlogEvent_TableMap) event,
+                        (RawBinlogEventTableMap) event,
                         fakeMicrosecondCounter
                     );
 
@@ -451,21 +451,21 @@ public class PipelineOrchestrator extends Thread {
             // Data event:
             case UPDATE_ROWS_EVENT:
                 doTimestampOverride(event);
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEvent_Rows) event, this);
+                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEventRows) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 updateEventCounter.mark();
                 break;
 
             case WRITE_ROWS_EVENT:
                 doTimestampOverride(event);
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEvent_Rows) event, this);
+                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEventRows) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 insertEventCounter.mark();
                 break;
 
             case DELETE_ROWS_EVENT:
                 doTimestampOverride(event);
-                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEvent_Rows) event, this);
+                augmentedRowsEvent = eventAugmenter.mapDataEventToSchema((RawBinlogEventRows) event, this);
                 applier.applyAugmentedRowsEvent(augmentedRowsEvent,this);
                 deleteEventCounter.mark();
                 break;
@@ -474,7 +474,7 @@ public class PipelineOrchestrator extends Thread {
                 // Later we may want to tag previous data events with xid_id
                 // (so we can know if events were in the same transaction).
                 doTimestampOverride(event);
-                applier.applyXidEvent((RawBinlogEvent_Xid) event);
+                applier.applyXidEvent((RawBinlogEventXid) event);
                 XIDCounter.mark();
                 currentTransactionMetadata = new CurrentTransactionMetadata();
                 break;
@@ -482,12 +482,12 @@ public class PipelineOrchestrator extends Thread {
             // reset the fakeMicrosecondCounter at the beginning of the new binlog file
             case FORMAT_DESCRIPTION_EVENT:
                 fakeMicrosecondCounter = 0;
-                applier.applyFormatDescriptionEvent((RawBinlogEvent_FormatDescription) event);
+                applier.applyFormatDescriptionEvent((RawBinlogEventFormatDescription) event);
                 break;
 
             // flush buffer at the end of binlog file
             case ROTATE_EVENT:
-                RawBinlogEvent_Rotate rotateEvent = (RawBinlogEvent_Rotate) event;
+                RawBinlogEventRotate rotateEvent = (RawBinlogEventRotate) event;
                 applier.applyRotateEvent(rotateEvent);
                 LOGGER.info("End of binlog file. Waiting for all tasks to finish before moving forward...");
 
@@ -585,7 +585,7 @@ public class PipelineOrchestrator extends Thread {
             // Query Event:
             case QUERY_EVENT:
 
-                String querySQL = ((RawBinlogEvent_Query) event).getSql();
+                String querySQL = ((RawBinlogEventQuery) event).getSql();
 
                 boolean isDDLTable   = queryInspector.isDDLTable(querySQL);
                 boolean isCommit     = queryInspector.isCommit(querySQL, isDDLTable);
@@ -603,7 +603,7 @@ public class PipelineOrchestrator extends Thread {
                     // There is an assumption that all tables in the transaction
                     // are from the same database. Cross database transactions
                     // are not supported.
-                    RawBinlogEvent_TableMap firstMapEvent = currentTransactionMetadata.getFirstMapEventInTransaction();
+                    RawBinlogEventTableMap firstMapEvent = currentTransactionMetadata.getFirstMapEventInTransaction();
                     if (firstMapEvent != null) {
                         String currentTransactionDBName = firstMapEvent.getDatabaseName().toString();
                         if (isReplicant(currentTransactionDBName)) {
@@ -623,9 +623,9 @@ public class PipelineOrchestrator extends Thread {
                     eventIsTracked = true;
                 } else if (isDDLTable) {
                     // DDL event should always contain db name
-                    String dbName = ((RawBinlogEvent_Query) event).getDatabaseName();
+                    String dbName = ((RawBinlogEventQuery) event).getDatabaseName();
                     if ((dbName == null) || dbName.length() == 0) {
-                        LOGGER.warn("No Db name in Query Event. Extracted SQL: " + ((RawBinlogEvent_Query) event).getSql());
+                        LOGGER.warn("No Db name in Query Event. Extracted SQL: " + ((RawBinlogEventQuery) event).getSql());
                     }
                     if (isReplicant(dbName)) {
                         eventIsTracked = true;
@@ -641,7 +641,8 @@ public class PipelineOrchestrator extends Thread {
 
             // TableMap event:
             case TABLE_MAP_EVENT:
-                eventIsTracked = isReplicant(((RawBinlogEvent_TableMap) event).getDatabaseName());
+                System.out.println(event.getClass().toString());
+                eventIsTracked = isReplicant(((RawBinlogEventTableMap) event).getDatabaseName());
                 break;
 
             // Data event:

@@ -5,7 +5,7 @@ package com.booking.replication.binlog.event;
  *
  * Taken from BinlogEventV4HeaderImpl
  */
-public class RawBinlogEvent_Header {
+public class RawBinlogEventHeader {
     private long timestamp;
     private int eventType;
     private long serverId;

@@ -65,24 +65,24 @@ public class EventAugmenter {
 
         if (event.isQuery()) {
 
-            String ddl = ((RawBinlogEvent_Query) event).getSql();
+            String ddl = ((RawBinlogEventQuery) event).getSql();
 
             // query
             HashMap<String, String> sqlCommands = new HashMap<>();
-            sqlCommands.put("databaseName", ((RawBinlogEvent_Query) event).getDatabaseName());
+            sqlCommands.put("databaseName", ((RawBinlogEventQuery) event).getDatabaseName());
             sqlCommands.put("originalDDL", ddl);
 
             sqlCommands.put(
                     "ddl",
                     rewriteActiveSchemaName( // since active schema has a postfix, we need to make sure that queires that
                             ddl,             // specify schema explicitly are rewritten so they work properly on active schema
-                            ((RawBinlogEvent_Query) event).getDatabaseName().toString()
+                            ((RawBinlogEventQuery) event).getDatabaseName().toString()
                     ));
 
                 // handle timezone overrides during schema changes
-                if (((RawBinlogEvent_Query) event).hasTimezoneOverride()) {
+                if (((RawBinlogEventQuery) event).hasTimezoneOverride()) {
 
-                    HashMap<String,String> timezoneOverrideCommands = ((RawBinlogEvent_Query) event).getTimezoneOverrideCommands();
+                    HashMap<String,String> timezoneOverrideCommands = ((RawBinlogEventQuery) event).getTimezoneOverrideCommands();
 
                     if (timezoneOverrideCommands.containsKey("timezonePre")) {
                         sqlCommands.put("timezonePre", timezoneOverrideCommands.get("timezonePre"));
@@ -121,21 +121,21 @@ public class EventAugmenter {
      * @param  event               AbstractRowEvent
      * @return augmentedDataEvent  AugmentedRow
      */
-    public AugmentedRowsEvent mapDataEventToSchema(RawBinlogEvent_Rows event, PipelineOrchestrator caller) throws TableMapException {
+    public AugmentedRowsEvent mapDataEventToSchema(RawBinlogEventRows event, PipelineOrchestrator caller) throws TableMapException {
 
         AugmentedRowsEvent au;
 
         switch (event.getEventType()) {
             case UPDATE_ROWS_EVENT:
-                RawBinlogEvent_Update updateRowsEvent = ((RawBinlogEvent_Update) event);
+                RawBinlogEventUpdateRows updateRowsEvent = ((RawBinlogEventUpdateRows) event);
                 au = augmentUpdateRowsEvent(updateRowsEvent, caller);
                 break;
             case WRITE_ROWS_EVENT:
-                RawBinlogEvent_Write writeRowsEvent = ((RawBinlogEvent_Write) event);
+                RawBinlogEventWriteRows writeRowsEvent = ((RawBinlogEventWriteRows) event);
                 au = augmentWriteRowsEvent(writeRowsEvent, caller);
                 break;
             case DELETE_ROWS_EVENT:
-                RawBinlogEvent_Delete deleteRowsEvent = ((RawBinlogEvent_Delete) event);
+                RawBinlogEventDeleteRows deleteRowsEvent = ((RawBinlogEventDeleteRows) event);
                 au = augmentDeleteRowsEvent(deleteRowsEvent, caller);
                 break;
             default:
@@ -149,7 +149,7 @@ public class EventAugmenter {
         return au;
     }
 
-    private AugmentedRowsEvent augmentWriteRowsEvent(RawBinlogEvent_Write writeRowsEvent, PipelineOrchestrator caller) throws TableMapException {
+    private AugmentedRowsEvent augmentWriteRowsEvent(RawBinlogEventWriteRows writeRowsEvent, PipelineOrchestrator caller) throws TableMapException {
 
         // table name
         String tableName = caller.currentTransactionMetadata.getTableNameFromID(writeRowsEvent.getTableId());
@@ -212,7 +212,7 @@ public class EventAugmenter {
 
     // ===============================================================
     // TODO: move delete augmenting to new parser
-    private AugmentedRowsEvent augmentDeleteRowsEvent(RawBinlogEvent_Delete deleteRowsEvent, PipelineOrchestrator pipeline)
+    private AugmentedRowsEvent augmentDeleteRowsEvent(RawBinlogEventDeleteRows deleteRowsEvent, PipelineOrchestrator pipeline)
             throws TableMapException {
 
         // table name
@@ -271,7 +271,7 @@ public class EventAugmenter {
         return augEventGroup;
     }
 
-    private AugmentedRowsEvent augmentUpdateRowsEvent(RawBinlogEvent_Update upEvent, PipelineOrchestrator caller) throws TableMapException {
+    private AugmentedRowsEvent augmentUpdateRowsEvent(RawBinlogEventUpdateRows upEvent, PipelineOrchestrator caller) throws TableMapException {
 
         // table name
         String tableName = caller.currentTransactionMetadata.getTableNameFromID(upEvent.getTableId());

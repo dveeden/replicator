@@ -1,13 +1,9 @@
 package com.booking.replication.augmenter;
 
-import com.booking.replication.binlog.event.RawBinlogEvent_Header;
 import com.booking.replication.schema.column.ColumnSchema;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.schema.table.TableSchemaVersion;
 import com.booking.replication.util.JsonBuilder;
-
-import com.google.code.or.binlog.BinlogEventV4Header;
-import com.google.code.or.binlog.impl.event.BinlogEventV4HeaderImpl;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;

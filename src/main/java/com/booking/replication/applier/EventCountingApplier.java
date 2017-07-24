@@ -2,10 +2,10 @@ package com.booking.replication.applier;
 
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.binlog.event.RawBinlogEvent_FormatDescription;
-import com.booking.replication.binlog.event.RawBinlogEvent_Rotate;
-import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
-import com.booking.replication.binlog.event.RawBinlogEvent_Xid;
+import com.booking.replication.binlog.event.RawBinlogEventFormatDescription;
+import com.booking.replication.binlog.event.RawBinlogEventRotate;
+import com.booking.replication.binlog.event.RawBinlogEventTableMap;
+import com.booking.replication.binlog.event.RawBinlogEventXid;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.codahale.metrics.Counter;
 
@@ -48,13 +48,13 @@ public class EventCountingApplier implements Applier {
     }
 
     @Override
-    public void applyXidEvent(RawBinlogEvent_Xid event) {
+    public void applyXidEvent(RawBinlogEventXid event) {
         wrapped.applyXidEvent(event);
         counter.inc();
     }
 
     @Override
-    public void applyRotateEvent(RawBinlogEvent_Rotate event) throws ApplierException, IOException {
+    public void applyRotateEvent(RawBinlogEventRotate event) throws ApplierException, IOException {
         wrapped.applyRotateEvent(event);
     }
 
@@ -70,13 +70,13 @@ public class EventCountingApplier implements Applier {
     }
 
     @Override
-    public void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event) {
+    public void applyFormatDescriptionEvent(RawBinlogEventFormatDescription event) {
         wrapped.applyFormatDescriptionEvent(event);
         counter.inc();
     }
 
     @Override
-    public void applyTableMapEvent(RawBinlogEvent_TableMap event) {
+    public void applyTableMapEvent(RawBinlogEventTableMap event) {
         wrapped.applyTableMapEvent(event);
         counter.inc();
     }

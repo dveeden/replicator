@@ -1,6 +1,6 @@
 package com.booking.replication.pipeline;
 
-import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
+import com.booking.replication.binlog.event.RawBinlogEventTableMap;
 import com.booking.replication.schema.exception.TableMapException;
 import com.google.common.base.Joiner;
 
@@ -18,16 +18,16 @@ public class CurrentTransactionMetadata {
     private Map<Long,String> tableID2Name = new HashMap<>();
     private Map<Long, String> tableID2DBName = new HashMap<>();
 
-    private RawBinlogEvent_TableMap firstMapEventInTransaction = null;
+    private RawBinlogEventTableMap firstMapEventInTransaction = null;
 
-    private final Map<String, RawBinlogEvent_TableMap> currentTransactionTableMapEvents = new HashMap<>();
+    private final Map<String, RawBinlogEventTableMap> currentTransactionTableMapEvents = new HashMap<>();
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CurrentTransactionMetadata.class);
 
     /**
      * Update table map cache.
      */
-    public void updateCache(RawBinlogEvent_TableMap event) {
+    public void updateCache(RawBinlogEventTableMap event) {
 
         if (firstMapEventInTransaction == null) {
             firstMapEventInTransaction = event;
@@ -76,16 +76,16 @@ public class CurrentTransactionMetadata {
         }
     }
 
-    public RawBinlogEvent_TableMap getTableMapEvent(String tableName) {
+    public RawBinlogEventTableMap getTableMapEvent(String tableName) {
         return currentTransactionTableMapEvents.get(tableName);
     }
 
-    public RawBinlogEvent_TableMap getFirstMapEventInTransaction() {
+    public RawBinlogEventTableMap getFirstMapEventInTransaction() {
         return firstMapEventInTransaction;
     }
 
 
-    public Map<String, RawBinlogEvent_TableMap> getCurrentTransactionTableMapEvents() {
+    public Map<String, RawBinlogEventTableMap> getCurrentTransactionTableMapEvents() {
         return currentTransactionTableMapEvents;
     }
 

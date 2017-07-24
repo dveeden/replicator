@@ -6,10 +6,10 @@ import com.booking.replication.applier.hbase.HBaseApplierWriter;
 import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.binlog.event.RawBinlogEvent_FormatDescription;
-import com.booking.replication.binlog.event.RawBinlogEvent_Rotate;
-import com.booking.replication.binlog.event.RawBinlogEvent_TableMap;
-import com.booking.replication.binlog.event.RawBinlogEvent_Xid;
+import com.booking.replication.binlog.event.RawBinlogEventFormatDescription;
+import com.booking.replication.binlog.event.RawBinlogEventRotate;
+import com.booking.replication.binlog.event.RawBinlogEventTableMap;
+import com.booking.replication.binlog.event.RawBinlogEventXid;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.HBaseSchemaManager;
@@ -84,14 +84,14 @@ public class HBaseApplier implements Applier {
     }
 
     @Override
-    public void applyXidEvent(RawBinlogEvent_Xid event) {
+    public void applyXidEvent(RawBinlogEventXid event) {
         // TODO: add transactionID to storage
         // long transactionID = event.getXid();
         markCurrentTransactionForCommit();
     }
 
     @Override
-    public void applyRotateEvent(RawBinlogEvent_Rotate event) throws ApplierException, IOException {
+    public void applyRotateEvent(RawBinlogEventRotate event) throws ApplierException, IOException {
         LOGGER.info("binlog rotate ["
                 + event.getBinlogFilename()
                 + "], flushing buffer of "
@@ -207,12 +207,12 @@ public class HBaseApplier implements Applier {
     }
 
     @Override
-    public void applyFormatDescriptionEvent(RawBinlogEvent_FormatDescription event) {
+    public void applyFormatDescriptionEvent(RawBinlogEventFormatDescription event) {
         LOGGER.info("Processing file " + event.getBinlogFilename());
     }
 
     @Override
-    public void applyTableMapEvent(RawBinlogEvent_TableMap event) {
+    public void applyTableMapEvent(RawBinlogEventTableMap event) {
 
         String tableName = event.getTableName().toString();
 
