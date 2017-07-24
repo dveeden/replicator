@@ -10,7 +10,6 @@ import com.booking.replication.pipeline.PipelinePosition;
 import com.booking.replication.queues.ReplicatorQueues;
 import com.booking.replication.replicant.ReplicantPool;
 
-import com.booking.replication.sql.QueryInspector;
 import com.booking.replication.util.BinlogCoordinatesFinder;
 import com.booking.replication.validation.ValidationService;
 import com.codahale.metrics.Counter;
@@ -105,7 +104,7 @@ public class Replicator {
 
                         LOGGER.info("found pseudoGTID in safe checkpoint: " + pseudoGTID);
 
-                        BinlogCoordinatesFinder coordinatesFinder = new BinlogCoordinatesFinder(replicantActiveHost,3306,configuration.getReplicantDBUserName(),configuration.getReplicantDBPassword(), new QueryInspector(configuration.getpGTIDPattern()));
+                        BinlogCoordinatesFinder coordinatesFinder = new BinlogCoordinatesFinder(replicantActiveHost,3306,configuration.getReplicantDBUserName(),configuration.getReplicantDBPassword());
 
                         BinlogCoordinatesFinder.BinlogCoordinates coordinates = coordinatesFinder.findCoordinates(pseudoGTID);
 
@@ -280,7 +279,7 @@ public class Replicator {
             configuration,
             applier,
             replicantPool,
-            binlogEventProducer.getOpenReplicator(),
+            binlogEventProducer,
             fakeMicrosecondCounter
     );
 

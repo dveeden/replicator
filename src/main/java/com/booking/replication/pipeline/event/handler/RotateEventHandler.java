@@ -85,14 +85,14 @@ public class RotateEventHandler implements BinlogEventV4Handler {
     }
 
     @Override
-    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException, TransactionSizeLimitException {
         final RotateEvent event = (RotateEvent) binlogEventV4;
         if (pipelineOrchestrator.isInTransaction()) {
             pipelineOrchestrator.addEventIntoTransaction(event);
         } else {
             pipelineOrchestrator.beginTransaction();
             pipelineOrchestrator.addEventIntoTransaction(event);
-            pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), PipelineOrchestrator.FAKEXID);
+            pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransactionMetadata.FAKEXID);
         }
     }
 }

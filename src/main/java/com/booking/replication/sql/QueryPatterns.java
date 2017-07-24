@@ -10,4 +10,5 @@ public class QueryPatterns {
     public static final String isDDLTemporaryTable = "(alter|drop|create|rename|truncate|modify)\\s+temporary\\s+(table)";
     public static final String isDDLView  = "(alter|drop|create|rename|truncate|modify)\\s+(view)";
     public static final String isANALYZE  = "(analyze)\\s+(table)";
+    public static final String isGTIDPattern  = "(?<=_pseudo_gtid_hint__asc\\:)(.{8}\\:.{16}\\:.{8})";
 }

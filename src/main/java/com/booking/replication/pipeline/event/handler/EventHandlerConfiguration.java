@@ -10,15 +10,13 @@ import com.booking.replication.sql.QueryInspector;
  */
 public class EventHandlerConfiguration {
     private Applier applier;
-    private QueryInspector queryInspector;
     private EventAugmenter eventAugmenter;
     private PipelineOrchestrator pipelineOrchestrator;
 
-    public EventHandlerConfiguration(Applier applier, EventAugmenter eventAugmenter, PipelineOrchestrator pipelineOrchestrator, QueryInspector queryInspector) {
+    public EventHandlerConfiguration(Applier applier, EventAugmenter eventAugmenter, PipelineOrchestrator pipelineOrchestrator) {
         this.applier = applier;
         this.eventAugmenter = eventAugmenter;
         this.pipelineOrchestrator = pipelineOrchestrator;
-        this.queryInspector = queryInspector;
     }
 
     public Applier getApplier() {
@@ -31,7 +29,4 @@ public class EventHandlerConfiguration {
 
     public PipelineOrchestrator getPipelineOrchestrator() { return  pipelineOrchestrator; }
 
-    public QueryInspector getQueryInspector() {
-        return queryInspector;
-    }
 }

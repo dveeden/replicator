@@ -42,10 +42,9 @@ public class XidEventHandler implements BinlogEventV4Handler {
     }
 
     @Override
-    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException, TransactionSizeLimitException {
         final XidEvent event = (XidEvent) binlogEventV4;
         // prepare trans data
-        pipelineOrchestrator.addEventIntoTransaction(event);
         pipelineOrchestrator.commitTransaction(event);
     }
 }

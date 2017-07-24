@@ -44,7 +44,7 @@ public class DeleteRowsEventHandler implements BinlogEventV4Handler {
     }
 
     @Override
-    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException, TransactionSizeLimitException {
         final AbstractRowEvent event = (AbstractRowEvent) binlogEventV4;
         pipelineOrchestrator.addEventIntoTransaction(event);
     }

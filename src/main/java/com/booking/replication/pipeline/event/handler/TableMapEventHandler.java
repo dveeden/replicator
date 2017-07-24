@@ -63,7 +63,7 @@ public class TableMapEventHandler implements BinlogEventV4Handler {
     }
 
     @Override
-    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException {
+    public void handle(BinlogEventV4 binlogEventV4) throws TransactionException, TransactionSizeLimitException {
         final TableMapEvent event = (TableMapEvent) binlogEventV4;
         pipelineOrchestrator.currentTransactionMetadata.updateCache(event);
         pipelineOrchestrator.addEventIntoTransaction(event);

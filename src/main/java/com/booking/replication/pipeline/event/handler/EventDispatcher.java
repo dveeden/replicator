@@ -1,6 +1,7 @@
 package com.booking.replication.pipeline.event.handler;
 
 
+import com.booking.replication.pipeline.BinlogEventProducerException;
 import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.common.util.MySQLConstants;
@@ -47,12 +48,14 @@ public class EventDispatcher implements BinlogEventV4Handler {
     }
 
     @Override
-    public void handle(BinlogEventV4 event) throws TransactionException {
+    public void handle(BinlogEventV4 event) throws TransactionException, TransactionSizeLimitException {
         LOGGER.debug("Handling event: " + event);
         try {
             BinlogEventV4Handler eventHandler = getHandler(event.getHeader().getEventType());
             eventHandler.handle(event);
-        } catch (Exception e) {
+        } catch (TransactionSizeLimitException e) {
+            throw e;
+        } catch (BinlogEventProducerException e) {
             throw new TransactionException("Failed to handle event: ", e);
         }
     }
