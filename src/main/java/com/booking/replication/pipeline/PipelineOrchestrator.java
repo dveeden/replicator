@@ -26,6 +26,7 @@ import com.google.common.base.Joiner;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import org.jruby.RubyProcess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,7 +56,7 @@ public class PipelineOrchestrator extends Thread {
     public  final  Configuration                   configuration;
     private final  ReplicantPool                   replicantPool;
     private final  Applier                         applier;
-    private final BlockingQueue<RawBinlogEvent>    rawBinlogEventQueue;
+    private final  BlockingQueue<RawBinlogEvent>   rawBinlogEventQueue;
     private final  QueryInspector                  queryInspector;
     private static EventAugmenter                  eventAugmenter;
     private static ActiveSchemaVersion             activeSchemaVersion;
@@ -172,12 +173,17 @@ public class PipelineOrchestrator extends Thread {
 
     @Override
     public void run() {
+
         setRunning(true);
 
         long timeOfLastEvent = System.currentTimeMillis();
 
+        System.out.println(rawBinlogEventQueue.size());
+        System.out.println(isRunning());
         while (isRunning()) {
+            System.out.println(rawBinlogEventQueue.size());
             try {
+
                 if (rawBinlogEventQueue.size() > 0) {
 
                     RawBinlogEvent rawBinlogEvent = this.rawBinlogEventQueue.poll(100, TimeUnit.MILLISECONDS);
@@ -187,6 +193,8 @@ public class PipelineOrchestrator extends Thread {
                         Thread.sleep(1000);
                         continue;
                     }
+
+                    System.out.println("got event");
 
                     timeOfLastEvent = System.currentTimeMillis();
                     eventsReceivedCounter.mark();

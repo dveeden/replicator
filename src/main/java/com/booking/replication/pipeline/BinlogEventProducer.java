@@ -20,6 +20,7 @@ import com.google.code.or.binlog.BinlogEventV4;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.google.code.or.common.util.MySQLConstants;
+import org.jruby.RubyProcess;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +64,7 @@ public class BinlogEventProducer {
      */
     public BinlogEventProducer(
 
-        LinkedBlockingQueue<RawBinlogEvent> rawBinlogEventQueue,
+        BlockingQueue<RawBinlogEvent> rawBinlogEventQueue,
         PipelinePosition                    pipelinePosition,
         Configuration                       configuration,
         ReplicantPool                       replicantPool,
@@ -111,25 +112,46 @@ public class BinlogEventProducer {
                 // This call is blocking the writes from server side. If time goes above
                 // net_write_timeout (which defaults to 60s) server will drop connection.
                 //      => Use back pressure to regulate the write rate to the queue.
-
                 if (isRunning()) {
                     boolean eventQueued = false;
                     while (!eventQueued) { // blocking block
                         try {
                             backPressureSleep();
-
-                            // TODO: get the proper type queue from RawBInlogEventsQueue (
-                            // or add push method that can accept multiple event types)
                             boolean added = false;
                             try {
-
-                                RawBinlogEvent rawBinlogEvent = new RawBinlogEvent(event);
-
+                                RawBinlogEvent rawBinlogEvent;
+                                switch (event.getHeader().getEventType()) {
+                                    case QUERY:
+                                        rawBinlogEvent = new RawBinlogEventQuery(event);
+                                        break;
+                                    case WRITE_ROWS:
+                                        rawBinlogEvent = new RawBinlogEventWriteRows(event);
+                                        break;
+                                    case UPDATE_ROWS:
+                                        rawBinlogEvent = new RawBinlogEventUpdateRows(event);
+                                        break;
+                                    case DELETE_ROWS:
+                                        rawBinlogEvent = new RawBinlogEventDeleteRows(event);
+                                        break;
+                                    case TABLE_MAP:
+                                        rawBinlogEvent = new RawBinlogEventTableMap(event);
+                                        break;
+                                    case FORMAT_DESCRIPTION:
+                                        rawBinlogEvent = new RawBinlogEventFormatDescription(event);
+                                        break;
+                                    case ROTATE:
+                                        rawBinlogEvent = new RawBinlogEventRotate(event);
+                                        break;
+                                    case STOP:
+                                        rawBinlogEvent = new RawBinlogEventStop(event);
+                                        break;
+                                    default:
+                                        rawBinlogEvent = new RawBinlogEvent(event);
+                                        break;
+                                }
                                 // binlog file name of the last red event. Inject in the
                                 // raw event object since we need it later for each event.
                                 rawBinlogEvent.setBinlogFilename(binaryLogClient.getBinlogFilename());
-                                // TODO: set in the RawBinlogEvent constructor and make immutable
-
                                 added = rawBinlogEventQueue.offer(rawBinlogEvent, 100, TimeUnit.MILLISECONDS);
                             } catch (Exception e) {
                                 LOGGER.error("rawBinlogEventsQueue.offer failed.", e);
@@ -138,7 +160,7 @@ public class BinlogEventProducer {
                             if (added) {
                                 opCounter++;
                                 eventQueued = true;
-                                if (opCounter % 100000 == 0) {
+                                if (opCounter % 100 == 0) {
                                     LOGGER.info("Producer reporting queue size => " + rawBinlogEventQueue.size());
                                 }
                             } else {
@@ -169,6 +191,7 @@ public class BinlogEventProducer {
         openReplicator.setBinlogEventListener(new BinlogEventListener() {
 
             public void onEvents(BinlogEventV4 event) {
+
                 producedEvents.mark();
 
                 // This call is blocking the writes from server side. If time goes above

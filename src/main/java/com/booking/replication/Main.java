@@ -25,7 +25,7 @@ import static spark.Spark.*;
 public class Main {
 
     // TODO: add this as cmd option
-    private static final int BINLOG_PARSER_PROVIDER_CODE = BinlogEventParserProviderCode.OR;
+    private static final int BINLOG_PARSER_PROVIDER_CODE = BinlogEventParserProviderCode.SHYIKO;
 
     /**
      * Main.
