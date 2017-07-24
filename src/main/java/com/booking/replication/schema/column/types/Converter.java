@@ -1,14 +1,11 @@
 package com.booking.replication.schema.column.types;
-
 import com.booking.replication.binlog.common.Cell;
-
 import com.booking.replication.binlog.common.cell.*;
-
 import com.booking.replication.schema.column.ColumnSchema;
 import com.booking.replication.schema.exception.TableMapException;
 
+import com.booking.replication.util.MySQLUtils;
 
-import com.google.code.or.common.util.MySQLUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,7 +14,6 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.sql.Date;
 import java.util.regex.Pattern;
-import java.sql.Timestamp;
 
 /**
  * Created by bdevetak on 23/11/15.
@@ -269,8 +265,8 @@ public class Converter {
         } else if (cell instanceof DateCell) {
             DateCell dc =  (DateCell) cell;
 
-            /** A workaround for the bug in the open replicator's "0000-00-00" date parsing logic: according to MySQL
-             * spec, this date is invalid and has a special treatment in jdbc
+            /** A workaround for the bug in the open replicator's "0000-00-00" date parsing logic:
+             *  according to MySQL spec, this date is invalid and has a special treatment in jdbc
              */
             return dc.getValue().equals(ZERO_DATE) ? "NULL" : dc.toString();
         } else if (cell instanceof DatetimeCell) {
@@ -285,7 +281,7 @@ public class Converter {
         } else if (cell instanceof TimeCell) {
             TimeCell tc = (TimeCell) cell;
             return tc.toString();
-            // TODO: check if this bug is fixed in zendesk fork
+            // TODO: check if this bug is exists in binlog connector
             /**
              * There is a bug in OR where instead of using the default year as 1970, it is using 0070.
              * This is a temporary measure to resolve it by working around at this layer.

@@ -2,6 +2,8 @@ package com.booking.replication.augmenter;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
+import com.codahale.metrics.Counter;
+
 import com.booking.replication.Metrics;
 import com.booking.replication.binlog.common.Cell;
 import com.booking.replication.binlog.common.Row;
@@ -15,11 +17,6 @@ import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.schema.table.TableSchemaVersion;
 
-import com.google.code.or.binlog.impl.event.*;
-import com.google.code.or.common.glossary.Column;
-import com.google.code.or.common.glossary.Pair;
-
-import com.codahale.metrics.Counter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

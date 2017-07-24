@@ -13,12 +13,10 @@ import com.booking.replication.binlog.event.RawBinlogEvent_Xid;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.schema.HBaseSchemaManager;
-
 import com.booking.replication.schema.TableNameMapper;
 import com.booking.replication.validation.ValidationService;
-import com.codahale.metrics.Counter;
 
-import com.google.code.or.binlog.impl.event.TableMapEvent;
+import com.codahale.metrics.Counter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

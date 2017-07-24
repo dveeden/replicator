@@ -1,6 +1,7 @@
 package com.booking.replication.binlog.common;
 
 import com.booking.replication.binlog.common.cell.*;
+
 import com.google.code.or.common.glossary.Column;
 import com.google.code.or.common.glossary.column.*;
 import com.google.code.or.io.ExceedLimitException;
