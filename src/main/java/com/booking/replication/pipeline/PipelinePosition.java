@@ -190,20 +190,11 @@ public class PipelinePosition {
         }
     }
 
-    public void updateCurrentPipelinePosition(
-        String host,
-        int serverID,
-        BinlogEventV4 event,
-        long fakeMicrosecondCounter
-    ) {
-        LOGGER.debug("Updating current pipeline position to: host=" + host
-                + " serverId=" + serverID + " binlogFilename=" + EventPosition.getEventBinlogFileName(event)
-                + " binlogPosition=" + EventPosition.getEventBinlogPosition(event)
-                + " fakeMicrosecondCounter=" + fakeMicrosecondCounter);
+    public void updateCurrentPipelinePosition(String host, int serverID, String binlogFilename, long binlogPosition, long fakeMicrosecondCounter) {
         this.getCurrentPosition().setHost(host);
         this.getCurrentPosition().setServerID(serverID);
-        this.getCurrentPosition().setBinlogFilename(EventPosition.getEventBinlogFileName(event));
-        this.getCurrentPosition().setBinlogPosition(EventPosition.getEventBinlogPosition(event));
+        this.getCurrentPosition().setBinlogFilename(binlogFilename);
+        this.getCurrentPosition().setBinlogPosition(binlogPosition);
         this.getCurrentPosition().setFakeMicrosecondsCounter(fakeMicrosecondCounter);
     }
 

@@ -3,6 +3,7 @@ package com.booking.replication.pipeline.event.handler;
 import com.booking.replication.Coordinator;
 import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
+import com.booking.replication.binlog.EventPosition;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.CurrentTransactionMetadata;
 import com.booking.replication.pipeline.PipelineOrchestrator;
@@ -48,11 +49,11 @@ public class RotateEventHandler implements BinlogEventV4Handler {
         eventHandlerConfiguration.getApplier().waitUntilAllRowsAreCommitted(event);
 
 
-        String currentBinlogFileName =
-                pipelinePosition.getCurrentPosition().getBinlogFilename();
+        String currentBinlogFileName = pipelinePosition.getCurrentPosition().getBinlogFilename();
+        long currentBinlogPosition = pipelinePosition.getCurrentPosition().getBinlogPosition();
 
         String nextBinlogFileName = event.getBinlogFileName().toString();
-        long currentBinlogPosition = event.getBinlogPosition();
+
 
         LOGGER.info("All rows committed for binlog file "
                 + currentBinlogFileName + ", moving to next binlog " + nextBinlogFileName);
@@ -64,7 +65,7 @@ public class RotateEventHandler implements BinlogEventV4Handler {
         LastCommittedPositionCheckpoint marker = new LastCommittedPositionCheckpoint(
                 pipelinePosition.getCurrentPosition().getHost(),
                 currentSlaveId,
-                nextBinlogFileName,
+                currentBinlogFileName,
                 currentBinlogPosition,
                 pseudoGTID,
                 pseudoGTIDFullQuery,

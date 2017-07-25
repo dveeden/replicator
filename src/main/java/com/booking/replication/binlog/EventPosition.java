@@ -18,6 +18,10 @@ public class EventPosition {
         return event.getHeader().getPosition();
     }
 
+    public static long getEventBinlogNextPosition(BinlogEventV4 event) {
+        return event.getHeader().getNextPosition();
+    }
+
     public static String getEventBinlogFileNameAndPosition(BinlogEventV4 event) {
         return getEventBinlogFileName(event) + ":" + getEventBinlogPosition(event);
     }

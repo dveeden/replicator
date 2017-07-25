@@ -1,6 +1,7 @@
 package com.booking.replication.pipeline;
 
 import com.booking.replication.binlog.EventPosition;
+import com.booking.replication.pipeline.event.handler.TransactionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.sql.QueryInspector;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -13,7 +14,6 @@ import com.google.common.base.Joiner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.transaction.xa.Xid;
 import java.util.*;
 
 /**
@@ -25,16 +25,16 @@ public class CurrentTransactionMetadata {
 
     public static final long FAKEXID = 0;
 
-    private UUID uuid = UUID.randomUUID();
+    private final UUID uuid = UUID.randomUUID();
     private long xid;
-    private Map<Long,String> tableID2Name = new HashMap<>();
-    private Map<Long, String> tableID2DBName = new HashMap<>();
+    private final Map<Long,String> tableID2Name = new HashMap<>();
+    private final Map<Long, String> tableID2DBName = new HashMap<>();
     private QueryEvent beginEvent = null;
     private BinlogEventV4 finishEvent = null;
+    private boolean isRewinded = false;
 
     private TableMapEvent firstMapEventInTransaction = null;
     private Queue<BinlogEventV4> events = new LinkedList<>();
-    private long eventsCounter = 0;
 
     private final Map<String, TableMapEvent> currentTransactionTableMapEvents = new HashMap<>();
 
@@ -42,6 +42,9 @@ public class CurrentTransactionMetadata {
     }
 
     public CurrentTransactionMetadata(QueryEvent event) {
+        if (!QueryInspector.getQueryEventType((QueryEvent) event).equals("BEGIN")) {
+            throw new RuntimeException("Can't set beginEvent for transaction to a wrong event type: " + event);
+        }
         beginEvent = event;
     }
 
@@ -77,20 +80,27 @@ public class CurrentTransactionMetadata {
         return beginEvent;
     }
 
-    public void setFinishEvent(BinlogEventV4 finishEvent) {
-        if (finishEvent instanceof XidEvent) {
-            // xa-capable engines block (InnoDB)
-            setXid(((XidEvent) finishEvent).getXid());
-            doTimestampOverride(finishEvent.getHeader().getTimestamp());
-            this.finishEvent = finishEvent;
-        } else if (finishEvent instanceof QueryEvent && QueryInspector.getQueryEventType((QueryEvent) finishEvent) == "BEGIN") {
-            // MyIsam block
-            setXid(FAKEXID);
-            doTimestampOverride(finishEvent.getHeader().getTimestamp());
-            this.finishEvent = finishEvent;
-        } else {
-            throw new RuntimeException("Can't set finishEvent for transaction to a wrong event type: " + finishEvent);
+
+    public void setFinishEvent(XidEvent finishEvent) throws TransactionException {
+        // xa-capable engines block (InnoDB)
+        if (isRewinded) {
+            if (this.finishEvent != null && ((XidEvent) this.finishEvent).getXid() != finishEvent.getXid()) {
+                throw new TransactionException("XidEvents must match if in rewinded transaction. Old: " + this.finishEvent + ", new: " + finishEvent);
+            }
         }
+        setXid(finishEvent.getXid());
+        doTimestampOverride(finishEvent.getHeader().getTimestamp());
+        this.finishEvent = finishEvent;
+    }
+
+    public void setFinishEvent(BinlogEventV4 finishEvent) throws TransactionException {
+        // MyIsam block
+        if (!QueryInspector.getQueryEventType((QueryEvent) finishEvent).equals("COMMIT")) {
+            throw new TransactionException("Can't set finishEvent for transaction to a wrong event type: " + finishEvent);
+        }
+        setXid(FAKEXID);
+        doTimestampOverride(finishEvent.getHeader().getTimestamp());
+        this.finishEvent = finishEvent;
     }
 
     public BinlogEventV4 getFinishEvent() {
@@ -106,7 +116,6 @@ public class CurrentTransactionMetadata {
 
     public void addEvent(BinlogEventV4 event) {
         events.add(event);
-        eventsCounter++;
     }
 
     public boolean hasEvents() {
@@ -119,7 +128,6 @@ public class CurrentTransactionMetadata {
 
     public void clearEvents() {
         events = new LinkedList<>();
-        eventsCounter = 0;
     }
 
     public void doTimestampOverride(long timestamp) {
@@ -128,8 +136,15 @@ public class CurrentTransactionMetadata {
         }
     }
 
+    public void setEventsTimestampToFinishEvent() throws TransactionException {
+        if (!hasFinishEvent()) {
+            throw new TransactionException("Can't set timestamp to timestamp of finish event while no finishEvent exists");
+        }
+        doTimestampOverride(finishEvent.getHeader().getTimestamp());
+    }
+
     public long getEventsCounter() {
-        return eventsCounter;
+        return events.size();
     }
 
     /**
@@ -181,6 +196,14 @@ public class CurrentTransactionMetadata {
         } else {
             return dbName;
         }
+    }
+
+    public boolean isRewinded() {
+        return isRewinded;
+    }
+
+    public void setRewinded(boolean rewinded) {
+        isRewinded = rewinded;
     }
 
     public TableMapEvent getTableMapEvent(String tableName) {

@@ -1,9 +1,6 @@
 package com.booking.replication.monitor;
 
-import com.booking.replication.pipeline.BinlogEventProducer;
-import com.booking.replication.pipeline.BinlogPositionInfo;
-import com.booking.replication.pipeline.PipelineOrchestrator;
-import com.booking.replication.pipeline.PipelinePosition;
+import com.booking.replication.pipeline.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,13 +65,16 @@ public class Overseer extends Thread {
 
     private void makeSureProducerIsRunning() {
         if (!producer.getOpenReplicator().isRunning()) {
-            LOGGER.error("Producer stopped running at pipeline position: "
-                    + pipelinePosition.getCurrentPosition().getBinlogFilename()
-                    + ":"
-                    + pipelinePosition.getCurrentPosition().getBinlogPosition()
-                    + ". Requesting pipeline shutdown...");
-            stopMonitoring();
-            pipelineOrchestrator.requestReplicatorShutdown();
+            CurrentTransactionMetadata currentTransactionMetadata = pipelineOrchestrator.getCurrentTransactionMetadata();
+            if (currentTransactionMetadata == null || !currentTransactionMetadata.isRewinded()) {
+                LOGGER.error("Producer stopped running at pipeline position: "
+                        + pipelinePosition.getCurrentPosition().getBinlogFilename()
+                        + ":"
+                        + pipelinePosition.getCurrentPosition().getBinlogPosition()
+                        + ". Requesting pipeline shutdown...");
+                stopMonitoring();
+                pipelineOrchestrator.requestReplicatorShutdown();
+            }
         }
     }
 }

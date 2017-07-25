@@ -57,7 +57,7 @@ public class PipelineOrchestrator extends Thread {
 
     private static final int BUFFER_FLUSH_INTERVAL = 30000; // <- force buffer flush every 30 sec
     private static final int DEFAULT_VERSIONS_FOR_MIRRORED_TABLES = 1000;
-    private static final int TRANSACTION_SIZE_LIMIT = 500;
+    private static final int TRANSACTION_SIZE_LIMIT = 20;
     private static EventAugmenter eventAugmenter;
     private static ActiveSchemaVersion activeSchemaVersion;
     private static LastCommittedPositionCheckpoint lastVerifiedPseudoGTIDCheckPoint;
@@ -66,10 +66,10 @@ public class PipelineOrchestrator extends Thread {
     private final Applier applier;
     private final ReplicatorQueues queues;
     private final EventDispatcher eventDispatcher = new EventDispatcher();
-    ;
+
     private final PipelinePosition pipelinePosition;
     private final BinlogEventProducer binlogEventProducer;
-    public CurrentTransactionMetadata currentTransactionMetadata;
+    public CurrentTransactionMetadata currentTransactionMetadata = null;
 
     private volatile boolean running = false;
     private volatile boolean replicatorShutdownRequested = false;
@@ -116,8 +116,6 @@ public class PipelineOrchestrator extends Thread {
 
         activeSchemaVersion = new ActiveSchemaVersion(configuration);
         eventAugmenter = new EventAugmenter(activeSchemaVersion, configuration.getAugmenterApplyUuid(), configuration.getAugmenterApplyXid());
-
-        currentTransactionMetadata = null;
 
         this.applier = applier;
 
@@ -236,39 +234,39 @@ public class PipelineOrchestrator extends Thread {
 
 
     private void processQueueLoop() throws Exception {
-        while (isRunning()) {
-            processQueue(null);
-        }
+        processQueueLoop(null);
     }
 
     private void processQueueLoop(BinlogPositionInfo exitOnBinlogPosition) throws Exception {
         while (isRunning()) {
-            if (!processQueue(exitOnBinlogPosition)) {
+            BinlogEventV4 event = waitForEvent();
+            LOGGER.debug("Received event: " + event);
+
+            timeOfLastEvent = System.currentTimeMillis();
+            eventsReceivedCounter.mark();
+
+            // Update pipeline position
+            fakeMicrosecondCounter++;
+
+            BinlogPositionInfo currentPosition = new BinlogPositionInfo(replicantPool.getReplicantDBActiveHost(),
+                    replicantPool.getReplicantDBActiveHostServerID(), EventPosition.getEventBinlogFileName(event),
+                    EventPosition.getEventBinlogPosition(event), fakeMicrosecondCounter);
+            pipelinePosition.setCurrentPosition(currentPosition);
+
+            processEvent(event);
+
+            if (exitOnBinlogPosition != null && currentPosition.compareTo(exitOnBinlogPosition) == 0) {
+                LOGGER.debug("currentTransactionMetadata: " + currentTransactionMetadata);
                 break;
             }
-            if (isRewinding) {
+            if (currentTransactionMetadata != null && currentTransactionMetadata.isRewinded()) {
+                currentTransactionMetadata.setEventsTimestampToFinishEvent();
                 applyTransactionDataEvents();
             }
         }
     }
 
-    private boolean processQueue(BinlogPositionInfo exitOnBinlogPosition) throws Exception {
-
-        BinlogEventV4 event = waitForEvent();
-        LOGGER.debug("Received event: " + event);
-
-        timeOfLastEvent = System.currentTimeMillis();
-        eventsReceivedCounter.mark();
-
-        // Update pipeline position
-        fakeMicrosecondCounter++;
-        pipelinePosition.updateCurrentPipelinePosition(
-                replicantPool.getReplicantDBActiveHost(),
-                replicantPool.getReplicantDBActiveHostServerID(),
-                event,
-                fakeMicrosecondCounter
-        );
-
+    private void processEvent(BinlogEventV4 event) throws Exception {
         if (skipEvent(event)) {
             LOGGER.debug("Skipping event: " + event);
             eventsSkippedCounter.mark();
@@ -277,12 +275,6 @@ public class PipelineOrchestrator extends Thread {
             calculateAndPropagateChanges(event);
             eventsProcessedCounter.mark();
         }
-
-        BinlogPositionInfo currentPosition = new BinlogPositionInfo(replicantPool.getReplicantDBActiveHostServerID(),
-                EventPosition.getEventBinlogFileName(event), EventPosition.getEventBinlogPosition(event));
-        LOGGER.info("exit:" + exitOnBinlogPosition);
-        LOGGER.info("curr:" + currentPosition);
-        return exitOnBinlogPosition == null || BinlogPositionInfo.compare(exitOnBinlogPosition, currentPosition) != 0;
     }
 
     private BinlogEventV4 rewindToEventType(String type) throws ApplierException, IOException, InterruptedException {
@@ -409,8 +401,8 @@ public class PipelineOrchestrator extends Thread {
         try {
             eventDispatcher.handle(event);
         } catch (TransactionSizeLimitException e) {
-            LOGGER.info("Transaction size limit(" + TRANSACTION_SIZE_LIMIT + ") exceeded. Applying with rewinding xid: " + currentTransactionMetadata.getXid());
-            applyTransactionWithRewinding(currentTransactionMetadata.getBeginEvent());
+            LOGGER.info("Transaction size limit(" + TRANSACTION_SIZE_LIMIT + ") exceeded. Applying with rewinding uuid: " + currentTransactionMetadata.getUuid());
+            applyTransactionWithRewinding();
         } catch (TransactionException e) {
             LOGGER.error("EventManger failed to handle event: ", e);
             requestShutdown();
@@ -598,38 +590,47 @@ public class PipelineOrchestrator extends Thread {
         }
     }
 
-    private void applyTransactionWithRewinding(QueryEvent oldBeginEvent) throws Exception {
+    private void applyTransactionWithRewinding() throws Exception {
         LOGGER.debug("Applying transaction with rewinding");
         if (isRewinding) {
-            throw new RuntimeException("Recursive rewinding detected. CurrentTransactionMetadata:" + currentTransactionMetadata + ", oldBeginEvent: " + oldBeginEvent);
+            throw new RuntimeException("Recursive rewinding detected. CurrentTransactionMetadata:" + currentTransactionMetadata);
         }
+        QueryEvent beginEvent = currentTransactionMetadata.getBeginEvent();
+        LOGGER.debug("Start rewinding transaction from: " + EventPosition.getEventBinlogFileNameAndPosition(beginEvent));
+
         isRewinding = true;
+        currentTransactionMetadata.setRewinded(true);
 
-        LOGGER.debug("Start rewinding transaction from: " + oldBeginEvent.getBinlogFilename() + ":" + oldBeginEvent.getHeader().getPosition());
-
-        // drop events from current transaction
-        dropTransaction();
+        // drop data events from current transaction
+        currentTransactionMetadata.clearEvents();
 
         // get next xid event and skip everything before
         XidEvent xidEvent = (XidEvent) rewindToEventType(XidEvent.class.toString());
-        beginTransaction(oldBeginEvent);
+        LOGGER.debug("currentTransactionMetadata: " + currentTransactionMetadata);
+        currentTransactionMetadata.setFinishEvent(xidEvent);
+        LOGGER.debug("currentTransactionMetadata: " + currentTransactionMetadata);
 
         // set binlog pos to begin pos, start openReplicator and apply the xid data to all events
         try {
             binlogEventProducer.stopAndClearQueue(10000, TimeUnit.MILLISECONDS);
-            binlogEventProducer.setBinlogFileName(oldBeginEvent.getBinlogFilename());
-            binlogEventProducer.setBinlogPosition(oldBeginEvent.getHeader().getNextPosition());
+            binlogEventProducer.setBinlogFileName(EventPosition.getEventBinlogFileName(beginEvent));
+            binlogEventProducer.setBinlogPosition(EventPosition.getEventBinlogNextPosition(beginEvent));
             binlogEventProducer.start();
         } catch (Exception e) {
             throw new BinlogEventProducerException("Can't stop binlogEventProducer to rewind a stream to the end of a transaction: ");
         }
-        // TODO: no applying happens
-        processQueueLoop(new BinlogPositionInfo(replicantPool.getReplicantDBActiveHostServerID(), xidEvent.getBinlogFilename(), xidEvent.getHeader().getPosition()));
+
+        processQueueLoop(new BinlogPositionInfo(replicantPool.getReplicantDBActiveHostServerID(),
+                EventPosition.getEventBinlogFileName(xidEvent), EventPosition.getEventBinlogPosition(xidEvent)));
+
+        // at this point transaction must be committed by xidEvent which we rewinded to
+        if (currentTransactionMetadata != null) {
+            throw new TransactionException("Transaction must be already committed at this point" + currentTransactionMetadata);
+        }
 
         isRewinding = false;
 
-        LOGGER.debug("Stop rewinding transaction at: " + xidEvent.getBinlogFilename() + ":" + xidEvent.getHeader().getPosition());
-        // skip the xid event
+        LOGGER.debug("Stop rewinding transaction at: " + EventPosition.getEventBinlogFileNameAndPosition(xidEvent));
     }
 
     public boolean isInTransaction() {
@@ -643,12 +644,12 @@ public class PipelineOrchestrator extends Thread {
         commitTransaction();
     }
 
-    public void commitTransaction(XidEvent xidEvent) {
+    public void commitTransaction(XidEvent xidEvent) throws TransactionException {
         currentTransactionMetadata.setFinishEvent(xidEvent);
         commitTransaction();
     }
 
-    public void commitTransaction(QueryEvent queryEvent) {
+    public void commitTransaction(QueryEvent queryEvent) throws TransactionException {
         currentTransactionMetadata.setFinishEvent(queryEvent);
         commitTransaction();
     }
@@ -675,6 +676,7 @@ public class PipelineOrchestrator extends Thread {
             LOGGER.error("Failed to commit transaction: " + currentTransactionMetadata, e);
             requestShutdown();
         }
+        LOGGER.debug("Transaction committed uuid: " + currentTransactionMetadata.getUuid() + ", id: " + currentTransactionMetadata.getXid());
         currentTransactionMetadata = null;
     }
 

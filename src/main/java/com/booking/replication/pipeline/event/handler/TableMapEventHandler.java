@@ -53,13 +53,6 @@ public class TableMapEventHandler implements BinlogEventV4Handler {
         LOGGER.debug("fakeMicrosecondCounter at tableMap event => " + pipelineOrchestrator.getFakeMicrosecondCounter());
 
         eventHandlerConfiguration.getApplier().applyTableMapEvent(event);
-
-        pipelinePosition.updatePipelineLastMapEventPosition(
-                replicantPool.getReplicantDBActiveHost(),
-                replicantPool.getReplicantDBActiveHostServerID(),
-                event,
-                pipelineOrchestrator.getFakeMicrosecondCounter()
-        );
     }
 
     @Override
