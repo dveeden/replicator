@@ -57,6 +57,7 @@ public class ZookeeperCoordinator implements CoordinatorInterface {
             LOGGER.info("Acquired leadership, starting Replicator.");
 
             try {
+                System.out.println("call run");
                 callback.run();
             } catch (Exception e) {
                 e.printStackTrace();

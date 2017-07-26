@@ -6,6 +6,7 @@ import com.booking.replication.Configuration;
 import com.booking.replication.Constants;
 import com.booking.replication.Metrics;
 
+import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.event.*;
 import com.booking.replication.replicant.ReplicantPool;
 
@@ -64,7 +65,7 @@ public class BinlogEventProducer {
      */
     public BinlogEventProducer(
 
-        BlockingQueue<RawBinlogEvent> rawBinlogEventQueue,
+        LinkedBlockingQueue<RawBinlogEvent> rawBinlogEventQueue,
         PipelinePosition                    pipelinePosition,
         Configuration                       configuration,
         ReplicantPool                       replicantPool,
@@ -149,9 +150,19 @@ public class BinlogEventProducer {
                                         rawBinlogEvent = new RawBinlogEvent(event);
                                         break;
                                 }
-                                // binlog file name of the last red event. Inject in the
-                                // raw event object since we need it later for each event.
+                                // there is no binlog file name in the binlog connector event, so need to
+                                // inject the binlog file name of the last red event (which is maintained
+                                // by the binlog client)
                                 rawBinlogEvent.setBinlogFilename(binaryLogClient.getBinlogFilename());
+
+//                                if (rawBinlogEvent.getEventType() == RawEventType.WRITE_ROWS_EVENT) {
+//                                    LOGGER.info("=====>" + event.getData().toString());
+//                                    RawBinlogEventWriteRows rows = (RawBinlogEventWriteRows) rawBinlogEvent;
+//                                    for (Row row : rows.getExtractedRows()) {
+//                                        LOGGER.info("------> " + row.toString());
+//                                    }
+//                                }
+
                                 added = rawBinlogEventQueue.offer(rawBinlogEvent, 100, TimeUnit.MILLISECONDS);
                             } catch (Exception e) {
                                 LOGGER.error("rawBinlogEventsQueue.offer failed.", e);
@@ -160,7 +171,7 @@ public class BinlogEventProducer {
                             if (added) {
                                 opCounter++;
                                 eventQueued = true;
-                                if (opCounter % 100 == 0) {
+                                if (opCounter % 10000 == 0) {
                                     LOGGER.info("Producer reporting queue size => " + rawBinlogEventQueue.size());
                                 }
                             } else {
@@ -180,7 +191,7 @@ public class BinlogEventProducer {
                 + binaryLogClient.getBinlogPosition()
                 + " }"
         );
-        binaryLogClient.connect();
+        binaryLogClient.connect(10000);
     }
 
     /**
@@ -323,7 +334,7 @@ public class BinlogEventProducer {
         if (BINLOG_EVENT_PARSER_PROVIDER_CODE == BinlogEventParserProviderCode.OR) {
             stopOpenReplicator((OpenReplicator)binlogEventParserProvider,  timeout, unit);
         }
-        else { // if (BINLOG_EVENT_PARSER_PROVIDER_CODE == BinlogEventParserProviderCode.OR) {
+        else {
             stopBinaryLogClient((BinaryLogClient)binlogEventParserProvider,timeout, unit);
         }
     }

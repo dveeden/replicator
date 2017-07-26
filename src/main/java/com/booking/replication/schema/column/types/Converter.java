@@ -34,12 +34,40 @@ public class Converter {
     // This function was taken from linked-in databus and adapted to output
     // strings instead of avro types.
     //
-    // Extracts string representation from or typed column. For now just
+    // Extracts string representation from typed column. For now just
     // calls toString. Later if needed some type specific processing
     // can be added
     public static String cellValueToString(Cell cell, ColumnSchema columnSchema)
         throws TableMapException {
 
+        // ================================================================
+        // Workaround for type resolution loss in mysql-binlog-connector:
+        //
+        // Basically, mysql-binlog-connector does not have separate classes
+        // for different mysql int types, so mysql tiny_int, small_int,
+        // medium_int and int are all mapped to java int type. This is
+        // different from open replicator which gets the type from
+        // table_map event and wraps the value into the corresponding class.
+        //
+        // There are two ways to solve this:
+        //
+        //      1. Write a custom deserializer which will return typed
+        //         values instead of Serializable
+        //
+        //      2. Use type information from active_schema
+        //
+        // Here we go with 2nd approach.
+        if (cell instanceof LongCell) {
+            if (columnSchema.getDataType().equals("tinyint")) {
+                cell = TinyCell.valueOf(((LongCell) cell).getValue());
+            }
+            if (columnSchema.getDataType().equals("smallint")) {
+                cell = ShortCell.valueOf(((LongCell) cell).getValue());
+            }
+            if (columnSchema.getDataType().equals("mediumint")) {
+                cell = Int24Cell.valueOf(((LongCell) cell).getValue());
+            }
+        }
         // ================================================================
         // Bit
         // ================================================================
@@ -217,7 +245,7 @@ public class Converter {
                     return ic.toString();
                 }
             } else {
-                throw new TableMapException("Unknown MySQL type in the event" + cell.getClass() + " Object = " + cell);
+                throw new TableMapException("Type mismatch for: { cell: " + cell.getClass() + ", column: " + columnSchema.getDataType());
             }
         } else if (cell instanceof LongCell) {
             // MySQL int (4 bytes)
@@ -300,7 +328,11 @@ public class Converter {
             Long timestamp2Value = ts2c.getValue().getTime();
             return String.valueOf(timestamp2Value);
         } else {
-            throw new TableMapException("Unknown MySQL type in the event" + cell.getClass() + " Object = " + cell);
+            if (cell != null) {
+                throw new TableMapException("Unknown MySQL type in the event" + cell.getClass() + " Object = " + cell);
+            } else {
+                throw new TableMapException("cell object is null");
+            }
         }
     }
 

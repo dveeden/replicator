@@ -37,7 +37,6 @@ public class CellExtractor {
 
         Serializable column = serializable;
 
-
         if(column instanceof Integer){
             //  This can correspond to these MySQL types
             //
@@ -50,17 +49,29 @@ public class CellExtractor {
 
             Integer cval = (Integer)column;
 
+            // mysql-binlog-connector does not have separate classes for different mysql
+            // int types, so mysql tiny_int, small_int, medium_int and int are all mapped
+            // to java int type. This is different from open replicator which gets the type
+            // from table_map event and wraps the value into the corresponding class.
+            // There are two ways to solve this:
+            //      1. Write a custom deserializer which will return typed values instead of
+            //         Serializable
+            //      2. Use type information from active_schema
+            // Here we go with 2nd approach. That is why all int family values are
+            // wrapped in LongCell (4bytes used) but later in schema map step they
+            // will be interpreted according to mysql type from active_schema. This means
+            // that atm. TinyCell, ShortCell and Int24Cell are not used.
             if (cval >= -128 && cval <=127){
                 // tiny int
-                cell = TinyCell.valueOf(cval);
+                cell = LongCell.valueOf(cval);
             }
             else if (cval >= -32768	&& cval <= 32767) {
                 // small int
-                cell = ShortCell.valueOf(cval);
+                cell = LongCell.valueOf(cval);
             }
             else if (cval >=-8388608 && cval <=	8388607) {
                 // medium int
-                cell = Int24Cell.valueOf(cval);
+                cell = LongCell.valueOf(cval);
             }
             else if (cval >= -2147483648 && cval <= 2147483647) {
                 // int
@@ -129,18 +140,25 @@ public class CellExtractor {
             //      {@link ColumnType#TIMESTAMP}: java.sql.Timestamp
             //      {@link ColumnType#TIMESTAMP_V2}: java.sql.Timestamp
 
-
+            // TODO: implement
         }
         else if(column instanceof java.sql.Date){
             // This can correspond to these MySQL types
+
+            // TODO: implement
+
 
         }
         else if(column instanceof java.sql.Time){
             // This can correspond to these MySQL types
 
+            // TODO: implement
+
         }
         else if(column instanceof String){
             // This can correspond to these MySQL types
+            cell = StringCell.valueOf(((String) column).getBytes());
+            // TODO: tests for different encodings
 
         }
         else if(column instanceof byte[]){

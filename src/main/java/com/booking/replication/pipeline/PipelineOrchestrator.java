@@ -12,6 +12,7 @@ import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.augmenter.EventAugmenter;
+import com.booking.replication.binlog.common.Row;
 import com.booking.replication.binlog.event.*;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 
@@ -178,10 +179,9 @@ public class PipelineOrchestrator extends Thread {
 
         long timeOfLastEvent = System.currentTimeMillis();
 
-        System.out.println(rawBinlogEventQueue.size());
-        System.out.println(isRunning());
+        System.out.println("PipelineOrchestrator running.");
+
         while (isRunning()) {
-            System.out.println(rawBinlogEventQueue.size());
             try {
 
                 if (rawBinlogEventQueue.size() > 0) {
@@ -193,8 +193,6 @@ public class PipelineOrchestrator extends Thread {
                         Thread.sleep(1000);
                         continue;
                     }
-
-                    System.out.println("got event");
 
                     timeOfLastEvent = System.currentTimeMillis();
                     eventsReceivedCounter.mark();

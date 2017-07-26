@@ -94,11 +94,7 @@ public class RawBinlogEvent {
             return getOpenReplicatorEventBinlogFileName(binlogEventV4);
         }
         else {
-            // TODO: need to do the whole dance as with open replicator, but more complicated
-            // there is no binlog file name in the event, so need to buffer the last seen
-            // binlog file name
-            return ((RotateEventData) binlogConnectorEvent.getData()).getBinlogFilename();
-
+            return binlogFilename;
         }
     }
 

@@ -33,6 +33,7 @@ public class FileCoordinator implements CoordinatorInterface {
 
     @Override
     public void onLeaderElection(Runnable callback) throws InterruptedException {
+        System.out.println("call run 2");
         callback.run();
         callback.wait();
     }
