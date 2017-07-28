@@ -119,6 +119,7 @@ public class CellExtractor {
         }
         else if(column instanceof java.util.Date){
             // This can correspond to these MySQL types
+            //
             //      {@link ColumnType#DATETIME}: java.util.Date
             //      {@link ColumnType#DATETIME_V2}: java.util.Date
             //
@@ -140,26 +141,20 @@ public class CellExtractor {
             //      {@link ColumnType#TIMESTAMP}: java.sql.Timestamp
             //      {@link ColumnType#TIMESTAMP_V2}: java.sql.Timestamp
 
-            // TODO: implement
+            // TODO: add integration test for case when timezone status variable is used
+            cell = new TimestampCell((java.sql.Timestamp)column);
         }
         else if(column instanceof java.sql.Date){
-            // This can correspond to these MySQL types
-
-            // TODO: implement
-
-
+            cell = new DateCell((java.sql.Date)column);
         }
         else if(column instanceof java.sql.Time){
-            // This can correspond to these MySQL types
-
-            // TODO: implement
-
+            // TODO: add integration test for case when timezone status variable is used
+            cell = new Time2Cell((java.sql.Time)column);
         }
         else if(column instanceof String){
             // This can correspond to these MySQL types
             cell = StringCell.valueOf(((String) column).getBytes());
-            // TODO: tests for different encodings
-
+            // TODO: tests & explicit handling for different mysql encodings
         }
         else if(column instanceof byte[]){
 

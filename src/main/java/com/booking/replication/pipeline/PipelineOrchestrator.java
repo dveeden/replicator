@@ -179,8 +179,6 @@ public class PipelineOrchestrator extends Thread {
 
         long timeOfLastEvent = System.currentTimeMillis();
 
-        System.out.println("PipelineOrchestrator running.");
-
         while (isRunning()) {
             try {
 
@@ -647,7 +645,6 @@ public class PipelineOrchestrator extends Thread {
 
             // TableMap event:
             case TABLE_MAP_EVENT:
-                System.out.println(event.getClass().toString());
                 eventIsTracked = isReplicant(((RawBinlogEventTableMap) event).getDatabaseName());
                 break;
 

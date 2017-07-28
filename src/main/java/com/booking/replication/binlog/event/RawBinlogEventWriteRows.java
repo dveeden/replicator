@@ -92,35 +92,15 @@ public class RawBinlogEventWriteRows extends RawBinlogEventRows {
             Iterator rowsIterator = data.getRows().iterator();
 
             while(rowsIterator.hasNext()) {
-                //System.out.println("dddddeeeeeeeeeeeeeeeeeeeeeeeee");
                 Serializable[] bcRow = (Serializable[])rowsIterator.next();
-                //Object[] row = (Object[])rowsIterator.next();
                 List<Cell> cells = new ArrayList<>();
-                //System.out.println("ddddd " + rows.toString());
                 for (Serializable column: bcRow) {
-
-                    //System.out.println("vvvvvvvvvvvvvvvvvvvvvvvvvvvv" + column.toString());
-
                     Cell cell = CellExtractor.extractCellFromBinlogConnectorColumn(column);
                     cells.add(cell);
                 }
                 rows.add(new Row(cells));
             }
 
-            // ===
-
-//            for (Serializable[] bcRow: ((WriteRowsEventData) binlogConnectorEvent.getData()).getRows()) {
-//                System.out.println("nnnnnnn " + bcRow.toString());
-//                List<Cell> cells = new ArrayList<>();
-//
-//
-//                for (int columnIndex = 0; columnIndex < bcRow.length; columnIndex++) {
-//                    Cell cell = CellExtractor.extractCellFromBinlogConnectorColumn(bcRow[columnIndex]);
-//                    cells.add(cell);
-//                }
-//                Row row = new Row(cells);
-//                rows.add(row);
-//            }
             return rows;
         }
     }

@@ -29,21 +29,10 @@ public class Row {
      */
     @Override
     public String toString() {
-        String str = "rowCells: ";
-        for (Cell cl: rowCells) {
-            if (cl != null) {
-                str += cl.getValue().toString();
-                str += ",";
-            }
-            else {
-                System.out.println("cell is null");
-            }
-        }
-        return str;
-//        List<String> cl = rowCells.stream()
-//                                 .map(c -> c.getValue().toString())
-//                                 .collect(Collectors.toList());
-//        return "rowCells: " + Joiner.on(",").join(cl);
+        List<String> cl = rowCells.stream()
+                                 .map(c -> c.getValue().toString())
+                                 .collect(Collectors.toList());
+        return "rowCells: " + Joiner.on(",").join(cl);
     }
 
     /**

@@ -300,21 +300,21 @@ public class Converter {
         } else if (cell instanceof DatetimeCell) {
             DatetimeCell dc = (DatetimeCell) cell;
             return dc.toString();
-            // TODO: check if this bug is fixed in zendesk fork
             // Bug in OR for DateTIme and Time data-types.
             // MilliSeconds is not available for these columns but is set with currentMillis() wrongly.
+            // TODO: check if this bug exists in binlog connector
         } else if (cell instanceof Datetime2Cell) {
             Datetime2Cell d2c = (Datetime2Cell) cell;
             return d2c.toString();
         } else if (cell instanceof TimeCell) {
             TimeCell tc = (TimeCell) cell;
             return tc.toString();
-            // TODO: check if this bug is exists in binlog connector
             /**
              * There is a bug in OR where instead of using the default year as 1970, it is using 0070.
              * This is a temporary measure to resolve it by working around at this layer.
              * The value obtained from OR is subtracted from "0070-00-01 00:00:00"
              */
+            // TODO: check if this bug is exists in binlog connector
         } else if (cell instanceof  Time2Cell) {
             Time2Cell t2c = (Time2Cell) cell;
             return t2c.toString();
