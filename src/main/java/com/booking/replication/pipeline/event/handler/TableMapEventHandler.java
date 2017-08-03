@@ -2,8 +2,7 @@ package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.Constants;
 import com.booking.replication.Metrics;
-import com.booking.replication.applier.Applier;
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.pipeline.PipelinePosition;
 import com.booking.replication.replicant.ReplicantPool;
@@ -38,7 +37,7 @@ public class TableMapEventHandler implements BinlogEventV4Handler {
     }
 
     @Override
-    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException, TableMapException {
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransaction currentTransaction) throws EventHandlerApplyException, TableMapException {
         final TableMapEvent event = (TableMapEvent) binlogEventV4;
         String tableName = event.getTableName().toString();
 
@@ -47,7 +46,7 @@ public class TableMapEventHandler implements BinlogEventV4Handler {
         }
 
         long tableID = event.getTableId();
-        String dbName = pipelineOrchestrator.currentTransactionMetadata.getDBNameFromTableID(tableID);
+        String dbName = pipelineOrchestrator.currentTransaction.getDBNameFromTableID(tableID);
 
         LOGGER.debug("processing events for { db => " + dbName + " table => " + event.getTableName() + " } ");
         LOGGER.debug("fakeMicrosecondCounter at tableMap event => " + pipelineOrchestrator.getFakeMicrosecondCounter());
@@ -58,7 +57,7 @@ public class TableMapEventHandler implements BinlogEventV4Handler {
     @Override
     public void handle(BinlogEventV4 binlogEventV4) throws TransactionException, TransactionSizeLimitException {
         final TableMapEvent event = (TableMapEvent) binlogEventV4;
-        pipelineOrchestrator.currentTransactionMetadata.updateCache(event);
+        pipelineOrchestrator.currentTransaction.updateCache(event);
         pipelineOrchestrator.addEventIntoTransaction(event);
     }
 }

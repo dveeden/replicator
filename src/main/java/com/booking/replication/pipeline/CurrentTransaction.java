@@ -1,6 +1,7 @@
 package com.booking.replication.pipeline;
 
 import com.booking.replication.binlog.EventPosition;
+import com.booking.replication.binlog.event.QueryEventType;
 import com.booking.replication.pipeline.event.handler.TransactionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.sql.QueryInspector;
@@ -19,9 +20,9 @@ import java.util.*;
 /**
  * Created by bosko on 11/10/15.
  */
-public class CurrentTransactionMetadata {
+public class CurrentTransaction {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(CurrentTransactionMetadata.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(CurrentTransaction.class);
 
     public static final long FAKEXID = 0;
 
@@ -38,11 +39,11 @@ public class CurrentTransactionMetadata {
 
     private final Map<String, TableMapEvent> currentTransactionTableMapEvents = new HashMap<>();
 
-    public CurrentTransactionMetadata() {
+    public CurrentTransaction() {
     }
 
-    public CurrentTransactionMetadata(QueryEvent event) {
-        if (!QueryInspector.getQueryEventType((QueryEvent) event).equals("BEGIN")) {
+    public CurrentTransaction(QueryEvent event) {
+        if (!QueryEventType.BEGIN.equals(QueryInspector.getQueryEventType(event))) {
             throw new RuntimeException("Can't set beginEvent for transaction to a wrong event type: " + event);
         }
         beginEvent = event;
@@ -93,9 +94,9 @@ public class CurrentTransactionMetadata {
         this.finishEvent = finishEvent;
     }
 
-    public void setFinishEvent(BinlogEventV4 finishEvent) throws TransactionException {
+    public void setFinishEvent(QueryEvent finishEvent) throws TransactionException {
         // MyIsam block
-        if (!QueryInspector.getQueryEventType((QueryEvent) finishEvent).equals("COMMIT")) {
+        if (!QueryEventType.COMMIT.equals(QueryInspector.getQueryEventType(finishEvent))) {
             throw new TransactionException("Can't set finishEvent for transaction to a wrong event type: " + finishEvent);
         }
         setXid(FAKEXID);
@@ -126,6 +127,10 @@ public class CurrentTransactionMetadata {
         return events;
     }
 
+    public long getEventsCounter() {
+        return events.size();
+    }
+
     public void clearEvents() {
         events = new LinkedList<>();
     }
@@ -141,10 +146,6 @@ public class CurrentTransactionMetadata {
             throw new TransactionException("Can't set timestamp to timestamp of finish event while no finishEvent exists");
         }
         doTimestampOverride(finishEvent.getHeader().getTimestamp());
-    }
-
-    public long getEventsCounter() {
-        return events.size();
     }
 
     /**
@@ -179,7 +180,7 @@ public class CurrentTransactionMetadata {
             LOGGER.error(String.format(
                     "Table ID not known. Known tables and ids are: %s",
                     Joiner.on(" ").join(tableID2DBName.keySet(), " ")));
-            throw new TableMapException("Table ID not present in CurrentTransactionMetadata!");
+            throw new TableMapException("Table ID not present in CurrentTransaction!");
         }
 
         return tableID2Name.get(tableID);
@@ -192,7 +193,7 @@ public class CurrentTransactionMetadata {
         String dbName = tableID2DBName.get(tableID);
 
         if (dbName == null) {
-            throw new TableMapException("Table ID not present in CurrentTransactionMetadata!");
+            throw new TableMapException("Table ID not present in CurrentTransaction!");
         } else {
             return dbName;
         }

@@ -30,8 +30,6 @@ public class PipelinePosition {
     private String currentReplicantHostName;
     private int    currentReplicantServerID;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PipelinePosition.class);
-
     public PipelinePosition(
         String mySQLHost,
         int    serverID,

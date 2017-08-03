@@ -5,8 +5,6 @@ import com.booking.replication.pipeline.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.rmi.ConnectException;
-
 /**
  * Created by bdevetak on 26/11/15.
  */
@@ -64,9 +62,10 @@ public class Overseer extends Thread {
     }
 
     private void makeSureProducerIsRunning() {
+        // TODO: merge into health-checker class
         if (!producer.getOpenReplicator().isRunning()) {
-            CurrentTransactionMetadata currentTransactionMetadata = pipelineOrchestrator.getCurrentTransactionMetadata();
-            if (currentTransactionMetadata == null || !currentTransactionMetadata.isRewinded()) {
+            CurrentTransaction currentTransaction = pipelineOrchestrator.getCurrentTransaction();
+            if (currentTransaction == null || !currentTransaction.isRewinded()) {
                 LOGGER.error("Producer stopped running at pipeline position: "
                         + pipelinePosition.getCurrentPosition().getBinlogFilename()
                         + ":"

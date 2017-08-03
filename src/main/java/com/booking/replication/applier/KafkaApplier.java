@@ -9,7 +9,7 @@ import com.booking.replication.applier.kafka.RowListMessage;
 import com.booking.replication.augmenter.AugmentedRow;
 import com.booking.replication.augmenter.AugmentedRowsEvent;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
 import com.google.code.or.binlog.BinlogEventV4;
@@ -249,7 +249,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedRowsEvent, CurrentTransactionMetadata currentTransactionMetadata) {
+    public void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedRowsEvent, CurrentTransaction currentTransaction) {
 
         int partitionNum;
         String rowBinlogPositionID;
@@ -302,7 +302,7 @@ public class KafkaApplier implements Applier {
                         //      (add current row to the buffer)
                         if (partitionCurrentMessageBuffer.get(partitionNum).isFull()) {
 
-                            // 1. close bufferW
+                            // 1. close buffer
                             partitionCurrentMessageBuffer.get(partitionNum).closeMessageBuffer();
 
                             // 2. send message

@@ -2,16 +2,14 @@ package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.Coordinator;
 import com.booking.replication.Metrics;
-import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
 import com.booking.replication.applier.HBaseApplier;
 import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
-import com.booking.replication.augmenter.EventAugmenter;
 import com.booking.replication.binlog.EventPosition;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.BinlogEventProducerException;
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.pipeline.PipelinePosition;
 import com.booking.replication.schema.ActiveSchemaVersion;
@@ -51,19 +49,19 @@ public class QueryEventHandler implements BinlogEventV4Handler {
     }
 
     @Override
-    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException, ApplierException, IOException {
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransaction currentTransaction) throws EventHandlerApplyException, ApplierException, IOException {
         final QueryEvent event = (QueryEvent) binlogEventV4;
         String querySQL = event.getSql().toString();
 
         switch (QueryInspector.getQueryEventType(event)) {
-            case "COMMIT":
+            case COMMIT:
                 commitQueryCounter.mark();
                 eventHandlerConfiguration.getApplier().applyCommitQueryEvent(event);
                 break;
-            case "BEGIN":
+            case BEGIN:
                 eventHandlerConfiguration.getApplier().applyBeginQueryEvent(event);
                 break;
-            case "DDLTABLE":
+            case DDLTABLE:
                 // Sync all the things here.
                 eventHandlerConfiguration.getApplier().forceFlush();
                 eventHandlerConfiguration.getApplier().waitUntilAllRowsAreCommitted(event);
@@ -98,7 +96,7 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                     throw new EventHandlerApplyException("Failed to apply event", e);
                 }
                 break;
-            case  "PSEUDOGTID":
+            case PSEUDOGTID:
                 pgtidCounter.mark();
 
                 try {
@@ -126,9 +124,9 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                     throw new EventHandlerApplyException("Failed to apply event", e);
                 }
                 break;
-            case "ANALYZE":
-            case "DDLTEMPORARYTABLE":
-            case "DDLVIEW":
+            case ANALYZE:
+            case DDLTEMPORARYTABLE:
+            case DDLVIEW:
                 // TODO: add view schema changes to view schema history
                 break;
             default:
@@ -141,35 +139,35 @@ public class QueryEventHandler implements BinlogEventV4Handler {
     public void handle(BinlogEventV4 binlogEventV4) throws TransactionException, BinlogEventProducerException, TransactionSizeLimitException {
         final QueryEvent event = (QueryEvent) binlogEventV4;
         switch (QueryInspector.getQueryEventType(event)) {
-            case "COMMIT":
+            case COMMIT:
                 pipelineOrchestrator.commitTransaction(event);
                 break;
-            case "BEGIN":
+            case BEGIN:
                 if (!pipelineOrchestrator.beginTransaction(event)) {
-                    throw new TransactionException("Failed to begin new transaction. Already have one: " + pipelineOrchestrator.getCurrentTransactionMetadata());
+                    throw new TransactionException("Failed to begin new transaction. Already have one: " + pipelineOrchestrator.getCurrentTransaction());
                 }
                 pipelineOrchestrator.addEventIntoTransaction(event);
                 break;
-            case "DDLTEMPORARYTABLE":
-            case "DDLTABLE":
-            case "DDLVIEW":
+            case DDLTEMPORARYTABLE:
+            case DDLTABLE:
+            case DDLVIEW:
                 if (pipelineOrchestrator.isInTransaction()) {
                     pipelineOrchestrator.addEventIntoTransaction(event);
                 } else {
                     pipelineOrchestrator.beginTransaction();
                     pipelineOrchestrator.addEventIntoTransaction(event);
-                    pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransactionMetadata.FAKEXID);
+                    pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransaction.FAKEXID);
                 }
                 break;
-            case "PSEUDOGTID":
+            case PSEUDOGTID:
                 // apply event right away through a fake transaction
                 if (!pipelineOrchestrator.beginTransaction()) {
-                    throw new TransactionException("Failed to begin new transaction. Already have one: " + pipelineOrchestrator.getCurrentTransactionMetadata());
+                    throw new TransactionException("Failed to begin new transaction. Already have one: " + pipelineOrchestrator.getCurrentTransaction());
                 }
                 pipelineOrchestrator.addEventIntoTransaction(event);
-                pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransactionMetadata.FAKEXID);
+                pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransaction.FAKEXID);
                 break;
-            case "ANALYZE":
+            case ANALYZE:
                 break;
             default:
                 LOGGER.warn("Unexpected query event: " + event.getSql());
@@ -178,7 +176,7 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                 } else {
                     pipelineOrchestrator.beginTransaction();
                     pipelineOrchestrator.addEventIntoTransaction(event);
-                    pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransactionMetadata.FAKEXID);
+                    pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransaction.FAKEXID);
                 }
         }
     }

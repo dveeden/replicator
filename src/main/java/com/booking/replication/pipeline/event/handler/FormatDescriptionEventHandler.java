@@ -1,6 +1,6 @@
 package com.booking.replication.pipeline.event.handler;
 
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
@@ -23,7 +23,7 @@ public class FormatDescriptionEventHandler implements BinlogEventV4Handler {
 
 
     @Override
-    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) {
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransaction currentTransaction) {
         final FormatDescriptionEvent event = (FormatDescriptionEvent) binlogEventV4;
         eventHandlerConfiguration.getApplier().applyFormatDescriptionEvent(event);
     }
@@ -36,7 +36,7 @@ public class FormatDescriptionEventHandler implements BinlogEventV4Handler {
         } else {
             pipelineOrchestrator.beginTransaction();
             pipelineOrchestrator.addEventIntoTransaction(event);
-            pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransactionMetadata.FAKEXID);
+            pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransaction.FAKEXID);
         }
     }
 }

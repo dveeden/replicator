@@ -1,11 +1,9 @@
 package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.Coordinator;
-import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
-import com.booking.replication.binlog.EventPosition;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.booking.replication.pipeline.PipelinePosition;
 import com.google.code.or.binlog.BinlogEventV4;
@@ -35,7 +33,7 @@ public class RotateEventHandler implements BinlogEventV4Handler {
     }
 
     @Override
-    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException, ApplierException, IOException {
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransaction currentTransaction) throws EventHandlerApplyException, ApplierException, IOException {
         final RotateEvent event = (RotateEvent) binlogEventV4;
         try {
             eventHandlerConfiguration.getApplier().applyRotateEvent(event);
@@ -93,7 +91,7 @@ public class RotateEventHandler implements BinlogEventV4Handler {
         } else {
             pipelineOrchestrator.beginTransaction();
             pipelineOrchestrator.addEventIntoTransaction(event);
-            pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransactionMetadata.FAKEXID);
+            pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransaction.FAKEXID);
         }
     }
 }

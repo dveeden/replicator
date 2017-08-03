@@ -2,9 +2,8 @@ package com.booking.replication.pipeline.event.handler;
 
 
 import com.booking.replication.pipeline.BinlogEventProducerException;
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.google.code.or.binlog.BinlogEventV4;
-import com.google.code.or.common.util.MySQLConstants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,11 +36,11 @@ public class EventDispatcher implements BinlogEventV4Handler {
     }
 
     @Override
-    public void apply(BinlogEventV4 event, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException {
+    public void apply(BinlogEventV4 event, CurrentTransaction currentTransaction) throws EventHandlerApplyException {
         LOGGER.debug("Applying event: " + event);
         try {
             BinlogEventV4Handler eventHandler = getHandler(event.getHeader().getEventType());
-            eventHandler.apply(event, currentTransactionMetadata);
+            eventHandler.apply(event, currentTransaction);
         } catch (Exception e) {
             throw new EventHandlerApplyException("Failed to apply event: ", e);
         }

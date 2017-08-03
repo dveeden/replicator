@@ -1,11 +1,9 @@
 package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.applier.ApplierException;
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.schema.exception.TableMapException;
 import com.google.code.or.binlog.BinlogEventV4;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 
@@ -15,7 +13,7 @@ import java.io.IOException;
 public class DummyEventHandler implements BinlogEventV4Handler {
 
     @Override
-    public void apply(BinlogEventV4 event, CurrentTransactionMetadata currentTransactionMetadata) throws TableMapException, ApplierException, IOException {
+    public void apply(BinlogEventV4 event, CurrentTransaction currentTransaction) throws TableMapException, ApplierException, IOException {
     }
 
     @Override

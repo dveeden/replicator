@@ -1,16 +1,13 @@
 package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.Metrics;
-import com.booking.replication.applier.Applier;
-import com.booking.replication.pipeline.CurrentTransactionMetadata;
+import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 import com.codahale.metrics.Meter;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.XidEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import javax.transaction.xa.Xid;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -32,10 +29,10 @@ public class XidEventHandler implements BinlogEventV4Handler {
 
 
     @Override
-    public void apply(BinlogEventV4 binlogEventV4, CurrentTransactionMetadata currentTransactionMetadata) throws EventHandlerApplyException {
+    public void apply(BinlogEventV4 binlogEventV4, CurrentTransaction currentTransaction) throws EventHandlerApplyException {
         final XidEvent event = (XidEvent) binlogEventV4;
-        if (currentTransactionMetadata.getXid() != event.getXid()) {
-            throw new EventHandlerApplyException("Xid of transaction doesn't match the current event xid: " + currentTransactionMetadata + ", " + event);
+        if (currentTransaction.getXid() != event.getXid()) {
+            throw new EventHandlerApplyException("Xid of transaction doesn't match the current event xid: " + currentTransaction + ", " + event);
         }
         eventHandlerConfiguration.getApplier().applyXidEvent(event);
         counter.mark();

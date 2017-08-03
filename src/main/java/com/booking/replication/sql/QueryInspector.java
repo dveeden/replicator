@@ -1,6 +1,7 @@
 package com.booking.replication.sql;
 
 import com.booking.replication.Configuration;
+import com.booking.replication.binlog.event.QueryEventType;
 import com.booking.replication.sql.exception.QueryInspectorException;
 
 import com.google.code.or.binlog.impl.event.QueryEvent;
@@ -21,11 +22,12 @@ public class QueryInspector {
     private static final Pattern isBeginPattern = Pattern.compile(QueryPatterns.isBEGIN, Pattern.CASE_INSENSITIVE);
     private static final Pattern isCommitPattern = Pattern.compile(QueryPatterns.isCOMMIT, Pattern.CASE_INSENSITIVE);
     private static final Pattern isAnalyzePattern = Pattern.compile(QueryPatterns.isANALYZE, Pattern.CASE_INSENSITIVE);
-    private static Pattern isPseudoGTIDPattern = Pattern.compile(QueryPatterns.isGTIDPattern, Pattern.CASE_INSENSITIVE);
+    private static Pattern isPseudoGTIDPattern = null;
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(QueryInspector.class);
-
-    public static void setIsPseudoGTIDPattern(String isPseudoGTIDPattern) {
+    public static void setIsPseudoGTIDPattern(String isPseudoGTIDPattern) throws IllegalStateException {
+        if (QueryInspector.isPseudoGTIDPattern != null) {
+            throw new IllegalStateException("Failed to reassign isPseudoGTIDPattern. Not null");
+        }
         QueryInspector.isPseudoGTIDPattern = Pattern.compile(isPseudoGTIDPattern, Pattern.CASE_INSENSITIVE);;
     }
 
@@ -139,26 +141,26 @@ public class QueryInspector {
         }
     }
 
-    public static String getQueryEventType(QueryEvent event) {
+    public static QueryEventType getQueryEventType(QueryEvent event) {
         String querySQL = event.getSql().toString();
         boolean isDDLTable = isDDLTable(querySQL);
         boolean isDDLView = isDDLView(querySQL);
 
         if (isCommit(querySQL, isDDLTable)) {
-            return "COMMIT";
+            return QueryEventType.COMMIT;
         } else if (isBegin(querySQL, isDDLTable)) {
-            return "BEGIN";
+            return QueryEventType.BEGIN;
         } else if (isPseudoGTID(querySQL)) {
-            return "PSEUDOGTID";
+            return QueryEventType.PSEUDOGTID;
         } else if (isDDLTable) {
-            return "DDLTABLE";
+            return QueryEventType.DDLTABLE;
         } else if (isDDLTemporaryTable(querySQL)) {
-            return "DDLTEMPORARYTABLE";
+            return QueryEventType.DDLTEMPORARYTABLE;
         } else if (isDDLView) {
-            return "DDLVIEW";
+            return QueryEventType.DDLVIEW;
         } else if (isAnalyze(querySQL)) {
-            return "ANALYZE";
+            return QueryEventType.ANALYZE;
         }
-        return "UNKNOWN";
+        return QueryEventType.UNKNOWN;
     }
 }

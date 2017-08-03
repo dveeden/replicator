@@ -7,7 +7,6 @@ import com.booking.replication.Constants;
 import com.booking.replication.Metrics;
 import com.booking.replication.replicant.ReplicantPool;
 import com.google.code.or.OpenReplicator;
-import com.google.code.or.binlog.BinlogEventListener;
 import com.google.code.or.binlog.BinlogEventV4;
 
 import com.codahale.metrics.Gauge;
@@ -32,7 +31,7 @@ public class BinlogEventProducer {
 
     private final OpenReplicator   openReplicator;
     private final Configuration    configuration;
-    private final ReplicantPool    replicantPool;
+    private final ReplicantPool replicantPool;
 
     private final int serverId = (new Random().nextInt() >>> 1) | (1 << 30); // a large positive random integer;
 
