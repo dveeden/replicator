@@ -16,12 +16,20 @@ public class BinlogPositionInfo {
 
     public BinlogPositionInfo(
         String host,
-        int serverID,
+        Integer serverID,
         String filename,
         long position
     ) {
         this.host           = host;
         this.serverID = serverID;
+        this.binlogFilename = filename;
+        this.binlogPosition = position;
+    }
+
+    public BinlogPositionInfo(
+            String filename,
+            long   position
+    ) {
         this.binlogFilename = filename;
         this.binlogPosition = position;
     }
@@ -34,7 +42,7 @@ public class BinlogPositionInfo {
      */
     public BinlogPositionInfo(
         String host,
-        int    serverID,
+        Integer serverID,
         String filename,
         long   position,
         long   fakeMsCounter
@@ -53,8 +61,10 @@ public class BinlogPositionInfo {
     }
 
     public static int compare(BinlogPositionInfo binlogPostition1, BinlogPositionInfo binlogPostition2) throws BinlogPositionComparationException {
-        if (Long.compare(binlogPostition1.getServerID(), binlogPostition2.getServerID()) != 0) {
-            throw new BinlogPositionComparationException("Can't compare serverId " + binlogPostition1.getServerID() + " to serverId " + binlogPostition2.getServerID());
+        if (binlogPostition1.getServerID() != null || binlogPostition2.getServerID() != null) {
+            if (Integer.compare(binlogPostition1.getServerID(), binlogPostition2.getServerID()) != 0) {
+                throw new BinlogPositionComparationException("Can't compare serverId " + binlogPostition1.getServerID() + " to serverId " + binlogPostition2.getServerID());
+            }
         }
         int filenameComp = binlogPostition1.binlogFilename.compareTo(binlogPostition2.getBinlogFilename());
         if (filenameComp != 0) return filenameComp;
@@ -121,7 +131,7 @@ public class BinlogPositionInfo {
         this.fakeMicrosecondsCounter = fakeMicrosecondsCounter;
     }
 
-    public int getServerID() {
+    public Integer getServerID() {
         return serverID;
     }
 

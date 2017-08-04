@@ -43,6 +43,8 @@ public class AugmentedRow {
 
     private String       rowUUID;
     private String       rowBinlogPositionID;
+    private UUID         transactionUUID;
+    private Long         transactionXid;
     private boolean      applyUuid = false;
     private boolean      applyXid = false;
 
@@ -81,6 +83,8 @@ public class AugmentedRow {
             TableSchemaVersion tableSchemaVersion,
             String              eventType,
             BinlogEventV4Header binlogEventV4Header,
+            UUID                transactionUUID,
+            Long                transactionXid,
             boolean applyUuid,
             boolean applyXid)  throws TableMapException {
 
@@ -89,10 +93,12 @@ public class AugmentedRow {
         this.tableName = tableName;
         this.eventType = eventType;
         this.eventV4Header = binlogEventV4Header;
+        this.transactionUUID = transactionUUID;
+        this.transactionXid = transactionXid;
         this.applyUuid = applyUuid;
         this.applyXid = applyXid;
 
-        initTableSchema(tableSchemaVersion);
+        if (tableName != null && tableSchemaVersion != null) initTableSchema(tableSchemaVersion);
 
         Long eventPosition = eventV4Header.getPosition();
 
@@ -250,5 +256,13 @@ public class AugmentedRow {
 
     public long getRowBinlogEventOrdinal() {
         return rowBinlogEventOrdinal;
+    }
+
+    public UUID getTransactionUUID() {
+        return transactionUUID;
+    }
+
+    public Long getTransactionXid() {
+        return transactionXid;
     }
 }

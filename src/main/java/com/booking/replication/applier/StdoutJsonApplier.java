@@ -39,7 +39,7 @@ public class StdoutJsonApplier implements Applier  {
     public StdoutJsonApplier(Configuration configuration) {}
 
     @Override
-    public void applyXidEvent(XidEvent event) {
+    public void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction) {
         if (VERBOSE) {
             for (String table : stats.keySet()) {
                 LOGGER.info("XID Event, current stats: { table => " + table + ", rows => " + stats.get(table));
@@ -118,14 +118,14 @@ public class StdoutJsonApplier implements Applier  {
     }
 
     @Override
-    public void applyBeginQueryEvent(QueryEvent event) {
+    public void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
         if (VERBOSE) {
             LOGGER.info("BEGIN");
         }
     }
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
+    public void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
         if (VERBOSE) {
             LOGGER.info("COMMIT");
             for (String table : stats.keySet()) {

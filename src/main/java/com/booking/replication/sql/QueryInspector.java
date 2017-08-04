@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 public class QueryInspector {
 
     private static final Pattern isDDLTemporaryTablePattern = Pattern.compile(QueryPatterns.isDDLTemporaryTable, Pattern.CASE_INSENSITIVE);
+    private static final Pattern isDDLDefinerPattern = Pattern.compile(QueryPatterns.isDDLDefiner, Pattern.CASE_INSENSITIVE);
     private static final Pattern isDDLTablePattern = Pattern.compile(QueryPatterns.isDDLTable, Pattern.CASE_INSENSITIVE);
     private static final Pattern isDDLViewPattern = Pattern.compile(QueryPatterns.isDDLView, Pattern.CASE_INSENSITIVE);
     private static final Pattern isBeginPattern = Pattern.compile(QueryPatterns.isBEGIN, Pattern.CASE_INSENSITIVE);
@@ -39,6 +40,18 @@ public class QueryInspector {
         }
 
         Matcher matcher = isDDLTemporaryTablePattern.matcher(querySQL);
+
+        return matcher.find();
+    }
+
+    public static boolean isDDLDefiner(String querySQL) {
+
+        // optimization
+        if (querySQL.equals("BEGIN")) {
+            return false;
+        }
+
+        Matcher matcher = isDDLDefinerPattern.matcher(querySQL);
 
         return matcher.find();
     }
@@ -152,6 +165,8 @@ public class QueryInspector {
             return QueryEventType.BEGIN;
         } else if (isPseudoGTID(querySQL)) {
             return QueryEventType.PSEUDOGTID;
+        } else if (isDDLDefiner(querySQL)) {
+            return QueryEventType.DDLDEFINER;
         } else if (isDDLTable) {
             return QueryEventType.DDLTABLE;
         } else if (isDDLTemporaryTable(querySQL)) {

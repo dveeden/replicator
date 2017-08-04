@@ -34,7 +34,7 @@ public class XidEventHandler implements BinlogEventV4Handler {
         if (currentTransaction.getXid() != event.getXid()) {
             throw new EventHandlerApplyException("Xid of transaction doesn't match the current event xid: " + currentTransaction + ", " + event);
         }
-        eventHandlerConfiguration.getApplier().applyXidEvent(event);
+        eventHandlerConfiguration.getApplier().applyXidEvent(event, currentTransaction);
         counter.mark();
     }
 

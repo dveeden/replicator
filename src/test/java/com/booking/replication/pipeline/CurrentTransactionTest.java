@@ -95,7 +95,7 @@ public class CurrentTransactionTest {
         for (BinlogEventV4 event: currentTransaction.getEvents()) {
             assertEquals(0, event.getHeader().getTimestamp());
         }
-        currentTransaction.doTimestampOverride(Long.MAX_VALUE);
+        currentTransaction.setEventsTimestamp(Long.MAX_VALUE);
         for (BinlogEventV4 event: currentTransaction.getEvents()) {
             assertEquals(Long.MAX_VALUE, event.getHeader().getTimestamp());
         }

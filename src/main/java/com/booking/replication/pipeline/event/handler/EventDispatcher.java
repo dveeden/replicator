@@ -37,9 +37,9 @@ public class EventDispatcher implements BinlogEventV4Handler {
 
     @Override
     public void apply(BinlogEventV4 event, CurrentTransaction currentTransaction) throws EventHandlerApplyException {
-        LOGGER.debug("Applying event: " + event);
         try {
             BinlogEventV4Handler eventHandler = getHandler(event.getHeader().getEventType());
+            LOGGER.debug("Applying event: " + event + ", handler: " + eventHandler);
             eventHandler.apply(event, currentTransaction);
         } catch (Exception e) {
             throw new EventHandlerApplyException("Failed to apply event: ", e);

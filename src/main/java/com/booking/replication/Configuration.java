@@ -150,6 +150,8 @@ public class Configuration {
         public List<String> tables;
         public List<String> excludetables;
         public String topic;
+        public Boolean apply_begin_event = false;
+        public Boolean apply_commit_event = false;
     }
 
     public static class ValidationConfiguration {
@@ -506,6 +508,10 @@ public class Configuration {
     public String getKafkaTopicName() {
         return kafka.topic;
     }
+
+    public boolean isKafkaApplyBeginEvent() { return kafka.apply_begin_event; }
+
+    public boolean isKafkaApplyCommitEvent() { return kafka.apply_commit_event; }
 
     public boolean isDryRunMode() {
         return dryRunMode;

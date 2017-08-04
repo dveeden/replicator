@@ -41,19 +41,20 @@ public class EventCountingApplier implements Applier {
     }
 
     @Override
-    public void applyBeginQueryEvent(QueryEvent event) {
-
-    }
-
-    @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
-        wrapped.applyCommitQueryEvent(event);
+    public void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
+        wrapped.applyBeginQueryEvent(event, currentTransaction);
         counter.inc();
     }
 
     @Override
-    public void applyXidEvent(XidEvent event) {
-        wrapped.applyXidEvent(event);
+    public void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
+        wrapped.applyCommitQueryEvent(event, currentTransaction);
+        counter.inc();
+    }
+
+    @Override
+    public void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction) {
+        wrapped.applyXidEvent(event, currentTransaction);
         counter.inc();
     }
 

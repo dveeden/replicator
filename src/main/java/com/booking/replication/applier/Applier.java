@@ -21,11 +21,11 @@ public interface Applier {
     void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedSingleRowEvent, CurrentTransaction currentTransaction)
             throws ApplierException, IOException;
 
-    void applyBeginQueryEvent(QueryEvent event);
+    void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction);
 
-    void applyCommitQueryEvent(QueryEvent event);
+    void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction);
 
-    void applyXidEvent(XidEvent event);
+    void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction);
 
     void applyRotateEvent(RotateEvent event) throws ApplierException, IOException;
 

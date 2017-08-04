@@ -23,7 +23,6 @@ import joptsimple.OptionSet;
 import org.junit.Before;
 import org.junit.Test;
 
-import javax.transaction.xa.Xid;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;

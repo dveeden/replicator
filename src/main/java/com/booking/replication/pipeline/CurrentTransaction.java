@@ -84,14 +84,18 @@ public class CurrentTransaction {
 
     public void setFinishEvent(XidEvent finishEvent) throws TransactionException {
         // xa-capable engines block (InnoDB)
+        if (this.finishEvent == null) {
+            setXid(finishEvent.getXid());
+            this.finishEvent = finishEvent;
+            return;
+        }
         if (isRewinded) {
-            if (this.finishEvent != null && ((XidEvent) this.finishEvent).getXid() != finishEvent.getXid()) {
+            if (((XidEvent) this.finishEvent).getXid() != finishEvent.getXid()) {
                 throw new TransactionException("XidEvents must match if in rewinded transaction. Old: " + this.finishEvent + ", new: " + finishEvent);
             }
+        } else {
+            throw new TransactionException("Trying to set a finish event twice. Old: " + this.finishEvent + ", new: " + finishEvent);
         }
-        setXid(finishEvent.getXid());
-        doTimestampOverride(finishEvent.getHeader().getTimestamp());
-        this.finishEvent = finishEvent;
     }
 
     public void setFinishEvent(QueryEvent finishEvent) throws TransactionException {
@@ -99,9 +103,24 @@ public class CurrentTransaction {
         if (!QueryEventType.COMMIT.equals(QueryInspector.getQueryEventType(finishEvent))) {
             throw new TransactionException("Can't set finishEvent for transaction to a wrong event type: " + finishEvent);
         }
-        setXid(FAKEXID);
-        doTimestampOverride(finishEvent.getHeader().getTimestamp());
-        this.finishEvent = finishEvent;
+        if (this.finishEvent == null) {
+            setXid(FAKEXID);
+            this.finishEvent = finishEvent;
+            return;
+        }
+        if (isRewinded) {
+            BinlogPositionInfo oldFinishEventPosition = new BinlogPositionInfo(((QueryEvent) this.finishEvent).getBinlogFilename(), this.finishEvent.getHeader().getPosition());
+            BinlogPositionInfo newFinishEventPosition = new BinlogPositionInfo(finishEvent.getBinlogFilename(), finishEvent.getHeader().getPosition());
+            try {
+                if (BinlogPositionInfo.compare(oldFinishEventPosition, newFinishEventPosition) != 0) {
+                    throw new TransactionException("XidEvents must match if in rewinded transaction. Old: " + this.finishEvent + ", new: " + finishEvent);
+                }
+            } catch (BinlogPositionComparationException e) {
+                throw new TransactionException("Failed to compare old and new commit events. Old: " + this.finishEvent + ", new: " + finishEvent, e);
+            }
+        } else {
+            throw new TransactionException("Trying to set a finish event twice. Old: " + this.finishEvent + ", new: " + finishEvent);
+        }
     }
 
     public BinlogEventV4 getFinishEvent() {
@@ -135,7 +154,18 @@ public class CurrentTransaction {
         events = new LinkedList<>();
     }
 
-    public void doTimestampOverride(long timestamp) {
+    public void setBeginEventTimestamp(long timestamp) throws TransactionException {
+        ((BinlogEventV4HeaderImpl) beginEvent.getHeader()).setTimestamp(timestamp);
+    }
+
+    public void setBeginEventTimestampToFinishEvent() throws TransactionException {
+        if (!hasFinishEvent()) {
+            throw new TransactionException("Can't set timestamp to timestamp of finish event while no finishEvent exists");
+        }
+        setBeginEventTimestamp(finishEvent.getHeader().getTimestamp());
+    }
+
+    public void setEventsTimestamp(long timestamp) throws TransactionException {
         for (BinlogEventV4 event : events) {
             ((BinlogEventV4HeaderImpl) event.getHeader()).setTimestamp(timestamp);
         }
@@ -145,7 +175,7 @@ public class CurrentTransaction {
         if (!hasFinishEvent()) {
             throw new TransactionException("Can't set timestamp to timestamp of finish event while no finishEvent exists");
         }
-        doTimestampOverride(finishEvent.getHeader().getTimestamp());
+        setEventsTimestamp(finishEvent.getHeader().getTimestamp());
     }
 
     /**

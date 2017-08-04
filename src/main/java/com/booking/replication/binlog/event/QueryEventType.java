@@ -6,6 +6,7 @@ package com.booking.replication.binlog.event;
 public enum QueryEventType {
     BEGIN,
     COMMIT,
+    DDLDEFINER,
     DDLTABLE,
     DDLTEMPORARYTABLE,
     DDLVIEW,

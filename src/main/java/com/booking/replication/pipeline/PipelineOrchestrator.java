@@ -13,9 +13,7 @@ import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.event.handler.*;
 import com.booking.replication.queues.ReplicatorQueues;
 import com.booking.replication.replicant.ReplicantPool;
-import com.booking.replication.replicant.ReplicantPool;
 import com.booking.replication.schema.ActiveSchemaVersion;
-import com.booking.replication.schema.MysqlActiveSchemaVersion;
 import com.booking.replication.schema.exception.SchemaTransitionException;
 import com.booking.replication.schema.exception.TableMapException;
 import com.booking.replication.sql.QueryInspector;
@@ -312,6 +310,8 @@ public class PipelineOrchestrator extends Thread {
 
             eventsRewindedCounter.mark();
 
+            moveFakeMicrosecondCounter(event.getHeader().getTimestamp());
+
             switch (event.getHeader().getEventType()) {
                 case MySQLConstants.XID_EVENT:
                     resultEvent = event;
@@ -327,6 +327,7 @@ public class PipelineOrchestrator extends Thread {
             }
         }
         LOGGER.debug("Rewinded to the position: " + EventPosition.getEventBinlogFileNameAndPosition(resultEvent) + ", event: " + resultEvent);
+        doTimestampOverride(resultEvent);
         return resultEvent;
     }
 
@@ -356,6 +357,18 @@ public class PipelineOrchestrator extends Thread {
         return null;
     }
 
+    private void moveFakeMicrosecondCounter(long timestamp) {
+
+        if (fakeMicrosecondCounter > 999998L) {
+            fakeMicrosecondCounter = 0L;
+            LOGGER.warn("Fake microsecond counter's overflowed, resetting to 0. It might lead to incorrect events order.");
+        }
+
+        if (timestamp > previousTimestamp) {
+            fakeMicrosecondCounter = 0L;
+            previousTimestamp = timestamp;
+        }
+    }
 
     /**
      *  Calculate and propagate changes.
@@ -372,11 +385,6 @@ public class PipelineOrchestrator extends Thread {
      * </p>
      */
     public void calculateAndPropagateChanges(BinlogEventV4 event) throws Exception {
-
-        if (fakeMicrosecondCounter > 999998L) {
-            fakeMicrosecondCounter = 0L;
-            LOGGER.warn("Fake microsecond counter's overflowed, resetting to 0. It might lead to incorrect events order.");
-        }
 
         // Calculate replication delay before the event timestamp is extended with fake miscrosecond part
         // Note: there is a bug in open replicator which results in rotate event having timestamp value = 0.
@@ -422,12 +430,7 @@ public class PipelineOrchestrator extends Thread {
             }
         }
 
-        long originalTimestamp = event.getHeader().getTimestamp();
-        if (originalTimestamp > previousTimestamp) {
-            fakeMicrosecondCounter = 0L;
-            previousTimestamp = originalTimestamp;
-        }
-
+        moveFakeMicrosecondCounter(event.getHeader().getTimestamp());
         doTimestampOverride(event);
 
         // Process Event
@@ -655,10 +658,13 @@ public class PipelineOrchestrator extends Thread {
             throw new BinlogEventProducerException("Can't stop binlogEventProducer to rewind a stream to the end of a transaction: ");
         }
 
+        // apply begin event before data events
+        applyTransactionBeginEvent();
+        // apply data events
         processQueueLoop(new BinlogPositionInfo(replicantPool.getReplicantDBActiveHostServerID(),
                 EventPosition.getEventBinlogFileName(commitEvent), EventPosition.getEventBinlogPosition(commitEvent)));
 
-        // at this point transaction must be committed by xidEvent which we rewinded to
+        // at this point transaction must be committed by xidEvent which we rewinded to and the commit events must be applied
         if (currentTransaction != null) {
             throw new TransactionException("Transaction must be already committed at this point" + currentTransaction);
         }
@@ -672,10 +678,11 @@ public class PipelineOrchestrator extends Thread {
         return (currentTransaction != null);
     }
 
-    public void commitTransaction(long timestamp, long xid) {
+    public void commitTransaction(long timestamp, long xid) throws TransactionException {
         // manual transaction commit
         currentTransaction.setXid(xid);
-        currentTransaction.doTimestampOverride(timestamp);
+        if (currentTransaction.hasBeginEvent()) currentTransaction.setBeginEventTimestamp(timestamp);
+        currentTransaction.setEventsTimestamp(timestamp);
         commitTransaction();
     }
 
@@ -689,9 +696,9 @@ public class PipelineOrchestrator extends Thread {
         commitTransaction();
     }
 
-    private void commitTransaction() {
+    private void commitTransaction() throws TransactionException {
         // apply all the buffered events
-        LOGGER.debug("Committing transaction uuid: " + currentTransaction.getUuid() + ", id: " + currentTransaction.getXid());
+        LOGGER.debug("/ transaction uuid: " + currentTransaction.getUuid() + ", id: " + currentTransaction.getXid());
         // apply changes from buffer and pass current metadata with xid and uuid
 
         try {
@@ -715,22 +722,24 @@ public class PipelineOrchestrator extends Thread {
         currentTransaction = null;
     }
 
-    private void applyTransactionBeginEvent() throws EventHandlerApplyException {
+    private void applyTransactionBeginEvent() throws EventHandlerApplyException, TransactionException {
         // apply begin event
         if (currentTransaction.hasBeginEvent()) {
+            currentTransaction.setBeginEventTimestampToFinishEvent();
             eventDispatcher.apply(currentTransaction.getBeginEvent(), currentTransaction);
         }
     }
 
-    private void applyTransactionDataEvents() throws EventHandlerApplyException {
+    private void applyTransactionDataEvents() throws EventHandlerApplyException, TransactionException {
         // apply data-changing events
+        if (currentTransaction.hasFinishEvent())    currentTransaction.setEventsTimestampToFinishEvent();
         for (BinlogEventV4 event : currentTransaction.getEvents()) {
             eventDispatcher.apply(event, currentTransaction);
         }
         currentTransaction.clearEvents();
     }
 
-    private void applyTransactionFinishEvent() throws EventHandlerApplyException {
+    private void applyTransactionFinishEvent() throws EventHandlerApplyException, TransactionException {
         // apply commit event
         if (currentTransaction.hasFinishEvent()) {
             eventDispatcher.apply(currentTransaction.getFinishEvent(), currentTransaction);

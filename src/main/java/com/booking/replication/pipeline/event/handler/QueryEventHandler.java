@@ -2,11 +2,13 @@ package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.Coordinator;
 import com.booking.replication.Metrics;
+import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
 import com.booking.replication.applier.HBaseApplier;
 import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
 import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.binlog.EventPosition;
+import com.booking.replication.binlog.event.QueryEventType;
 import com.booking.replication.checkpoints.LastCommittedPositionCheckpoint;
 import com.booking.replication.pipeline.BinlogEventProducerException;
 import com.booking.replication.pipeline.CurrentTransaction;
@@ -52,14 +54,16 @@ public class QueryEventHandler implements BinlogEventV4Handler {
     public void apply(BinlogEventV4 binlogEventV4, CurrentTransaction currentTransaction) throws EventHandlerApplyException, ApplierException, IOException {
         final QueryEvent event = (QueryEvent) binlogEventV4;
         String querySQL = event.getSql().toString();
+        QueryEventType queryEventType = QueryInspector.getQueryEventType(event);
+        LOGGER.debug("Applying event: " + event + ", type: " + queryEventType);
 
-        switch (QueryInspector.getQueryEventType(event)) {
+        switch (queryEventType) {
             case COMMIT:
                 commitQueryCounter.mark();
-                eventHandlerConfiguration.getApplier().applyCommitQueryEvent(event);
+                eventHandlerConfiguration.getApplier().applyCommitQueryEvent(event, currentTransaction);
                 break;
             case BEGIN:
-                eventHandlerConfiguration.getApplier().applyBeginQueryEvent(event);
+                eventHandlerConfiguration.getApplier().applyBeginQueryEvent(event, currentTransaction);
                 break;
             case DDLTABLE:
                 // Sync all the things here.
@@ -125,9 +129,11 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                 }
                 break;
             case ANALYZE:
+            case DDLDEFINER:
             case DDLTEMPORARYTABLE:
             case DDLVIEW:
                 // TODO: add view schema changes to view schema history
+                LOGGER.debug("Dropping an event of type: " + queryEventType);
                 break;
             default:
                 LOGGER.warn("Unexpected query event: " + querySQL);
@@ -138,7 +144,8 @@ public class QueryEventHandler implements BinlogEventV4Handler {
     @Override
     public void handle(BinlogEventV4 binlogEventV4) throws TransactionException, BinlogEventProducerException, TransactionSizeLimitException {
         final QueryEvent event = (QueryEvent) binlogEventV4;
-        switch (QueryInspector.getQueryEventType(event)) {
+        QueryEventType queryEventType = QueryInspector.getQueryEventType(event);
+        switch (queryEventType) {
             case COMMIT:
                 pipelineOrchestrator.commitTransaction(event);
                 break;
@@ -146,7 +153,6 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                 if (!pipelineOrchestrator.beginTransaction(event)) {
                     throw new TransactionException("Failed to begin new transaction. Already have one: " + pipelineOrchestrator.getCurrentTransaction());
                 }
-                pipelineOrchestrator.addEventIntoTransaction(event);
                 break;
             case DDLTEMPORARYTABLE:
             case DDLTABLE:
@@ -168,6 +174,8 @@ public class QueryEventHandler implements BinlogEventV4Handler {
                 pipelineOrchestrator.commitTransaction(event.getHeader().getTimestamp(), CurrentTransaction.FAKEXID);
                 break;
             case ANALYZE:
+            case DDLDEFINER:
+                LOGGER.debug("Dropping an event of type: " + queryEventType);
                 break;
             default:
                 LOGGER.warn("Unexpected query event: " + event.getSql());

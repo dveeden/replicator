@@ -19,17 +19,17 @@ public class DummyApplier implements Applier {
     }
 
     @Override
-    public void applyBeginQueryEvent(QueryEvent event) {
+    public void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
 
     }
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
+    public void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
 
     }
 
     @Override
-    public void applyXidEvent(XidEvent event) {
+    public void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction) {
 
     }
 

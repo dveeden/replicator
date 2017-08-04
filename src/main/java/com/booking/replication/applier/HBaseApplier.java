@@ -82,16 +82,16 @@ public class HBaseApplier implements Applier {
     }
 
     @Override
-    public void applyBeginQueryEvent(QueryEvent event) {
+    public void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
     }
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event) {
+    public void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
         markCurrentTransactionForCommit();
     }
 
     @Override
-    public void applyXidEvent(XidEvent event) {
+    public void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction) {
         // TODO: add transactionID to storage
         // long transactionID = event.getXid();
         markCurrentTransactionForCommit();

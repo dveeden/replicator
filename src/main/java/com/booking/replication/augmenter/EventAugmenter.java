@@ -127,7 +127,7 @@ public class EventAugmenter {
      *
      * @param  event               AbstractRowEvent
      * @param currentTransaction
-     * @return augmentedDataEvent  AugmentedRow
+     * @return AugmentedRowsEvent  AugmentedRow
      */
     public AugmentedRowsEvent mapDataEventToSchema(AbstractRowEvent event, CurrentTransaction currentTransaction) throws TableMapException {
 
@@ -204,6 +204,8 @@ public class EventAugmenter {
                     tableSchemaVersion,
                     evType,
                     writeRowsEvent.getHeader(),
+                    currentTransaction.getUuid(),
+                    currentTransaction.getXid(),
                     applyUuid,
                     applyXid
             );
@@ -271,12 +273,14 @@ public class EventAugmenter {
             rowBinlogEventOrdinal++;
 
             AugmentedRow augEvent = new AugmentedRow(
-                augEventGroup.getBinlogFileName(),
-                rowBinlogEventOrdinal,
-                tableName,
+                    augEventGroup.getBinlogFileName(),
+                    rowBinlogEventOrdinal,
+                    tableName,
                     tableSchemaVersion,
-                evType,
-                writeRowsEvent.getHeader(),
+                    evType,
+                    writeRowsEvent.getHeader(),
+                    currentTransaction.getUuid(),
+                    currentTransaction.getXid(),
                     applyUuid,
                     applyXid
             );
@@ -347,6 +351,8 @@ public class EventAugmenter {
                     tableSchemaVersion,
                     evType,
                     deleteRowsEvent.getHeader(),
+                    currentTransaction.getUuid(),
+                    currentTransaction.getXid(),
                     applyUuid,
                     applyXid
             );
@@ -418,6 +424,8 @@ public class EventAugmenter {
                     tableSchemaVersion,
                     evType,
                     deleteRowsEvent.getHeader(),
+                    currentTransaction.getUuid(),
+                    currentTransaction.getXid(),
                     applyUuid,
                     applyXid
             );
@@ -484,12 +492,14 @@ public class EventAugmenter {
             rowBinlogEventOrdinal++;
 
             AugmentedRow augEvent = new AugmentedRow(
-                augEventGroup.getBinlogFileName(),
-                rowBinlogEventOrdinal,
-                tableName,
+                    augEventGroup.getBinlogFileName(),
+                    rowBinlogEventOrdinal,
+                    tableName,
                     tableSchemaVersion,
-                evType,
-                upEvent.getHeader(),
+                    evType,
+                    upEvent.getHeader(),
+                    currentTransaction.getUuid(),
+                    currentTransaction.getXid(),
                     applyUuid,
                     applyXid
             );
@@ -561,12 +571,14 @@ public class EventAugmenter {
             rowBinlogEventOrdinal++;
 
             AugmentedRow augEvent = new AugmentedRow(
-                augEventGroup.getBinlogFileName(),
-                rowBinlogEventOrdinal,
-                tableName,
+                    augEventGroup.getBinlogFileName(),
+                    rowBinlogEventOrdinal,
+                    tableName,
                     tableSchemaVersion,
-                evType,
-                upEvent.getHeader(),
+                    evType,
+                    upEvent.getHeader(),
+                    currentTransaction.getUuid(),
+                    currentTransaction.getXid(),
                     applyUuid,
                     applyXid
             );
