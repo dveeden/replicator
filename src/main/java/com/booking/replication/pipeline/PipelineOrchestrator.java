@@ -60,11 +60,11 @@ public class PipelineOrchestrator extends Thread {
     private static final int DEFAULT_VERSIONS_FOR_MIRRORED_TABLES = 1000;
     private static final long QUEUE_POLL_TIMEOUT = 100L;
     private static final long QUEUE_POLL_SLEEP = 500;
-    public static final int TRANSACTION_SIZE_LIMIT = 20;
     private static EventAugmenter eventAugmenter;
     private static ActiveSchemaVersion activeSchemaVersion;
     private static LastCommittedPositionCheckpoint lastVerifiedPseudoGTIDCheckPoint;
     public final Configuration configuration;
+    private final Configuration.OrchestratorConfiguration orchestratorConfiguration;
     private final ReplicantPool replicantPool;
     private final Applier applier;
     private final ReplicatorQueues queues;
@@ -115,6 +115,7 @@ public class PipelineOrchestrator extends Thread {
 
         queues = repQueues;
         configuration = repcfg;
+        orchestratorConfiguration = configuration.getOrchestratorConfiguration();
 
         this.replicantPool = replicantPool;
         this.fakeMicrosecondCounter = fakeMicrosecondCounter;
@@ -384,7 +385,7 @@ public class PipelineOrchestrator extends Thread {
      *      a. match column names and types
      * </p>
      */
-    public void calculateAndPropagateChanges(BinlogEventV4 event) throws Exception {
+    private void calculateAndPropagateChanges(BinlogEventV4 event) throws Exception {
 
         // Calculate replication delay before the event timestamp is extended with fake miscrosecond part
         // Note: there is a bug in open replicator which results in rotate event having timestamp value = 0.
@@ -437,7 +438,7 @@ public class PipelineOrchestrator extends Thread {
         try {
             eventDispatcher.handle(event);
         } catch (TransactionSizeLimitException e) {
-            LOGGER.info("Transaction size limit(" + TRANSACTION_SIZE_LIMIT + ") exceeded. Applying with rewinding uuid: " + currentTransaction.getUuid());
+            LOGGER.info("Transaction size limit(" + orchestratorConfiguration.getRewindingThreshold() + ") exceeded. Applying with rewinding uuid: " + currentTransaction.getUuid());
             applyTransactionWithRewinding();
         } catch (TransactionException e) {
             LOGGER.error("EventManger failed to handle event: ", e);
@@ -445,7 +446,7 @@ public class PipelineOrchestrator extends Thread {
         }
     }
 
-    public boolean isReplicant(String schemaName) {
+    private boolean isReplicant(String schemaName) {
         return schemaName.equals(configuration.getReplicantSchemaName());
     }
 
@@ -456,7 +457,7 @@ public class PipelineOrchestrator extends Thread {
      * @param  event Binlog event that needs to be checked
      * @return shouldSkip Weather event should be skipped or processed
      */
-    public boolean skipEvent(BinlogEventV4 event) throws Exception {
+    private boolean skipEvent(BinlogEventV4 event) throws Exception {
         // if there is a last safe checkpoint, skip events that are before
         // or equal to it, so that the same events are not writen multiple
         // times (beside wasting IO, this would fail the DDL operations,
@@ -517,7 +518,7 @@ public class PipelineOrchestrator extends Thread {
                     case DDLTABLE:
                         // DDL event should always contain db name
                         String dbName = ((QueryEvent) event).getDatabaseName().toString();
-                        if ((dbName == null) || dbName.length() == 0) {
+                        if (dbName.length() == 0) {
                             LOGGER.warn("No Db name in Query Event. Extracted SQL: " + ((QueryEvent) event).getSql().toString());
                         }
                         if (isReplicant(dbName)) {
@@ -549,27 +550,6 @@ public class PipelineOrchestrator extends Thread {
             case MySQLConstants.DELETE_ROWS_EVENT_V2:
                 return currentTransaction.getFirstMapEventInTransaction() == null;
             case MySQLConstants.XID_EVENT:
-//                if (!currentTransaction.hasMappingInTransaction()) {
-//                    if (currentTransaction.getEvents().size() == 0) {
-//                        throw new TransactionException("Got COMMIT while not in transaction: " + currentTransaction);
-//                    } else if (currentTransaction.getEvents().size() == 1) {
-//                        BinlogEventV4 bufferedEvent = currentTransaction.getEvents().peek();
-//                        if (bufferedEvent.getHeader().getEventType() == MySQLConstants.QUERY_EVENT && queryInspector.getQueryEventType((QueryEventType) bufferedEvent) == "BEGIN") {
-//                            // empty transaction or all of the events in between have been dropped. Skipping
-//                            dropTransaction();
-//                            return true;
-//                        }
-//                    }
-//                    LOGGER.warn(String.format(
-//                            "Received COMMIT event, but currentTransaction is empty! Tables in transaction are %s",
-//                            Joiner.on(", ").join(currentTransaction.getCurrentTransactionTableMapEvents().keySet())
-//                            )
-//                    );
-//                    throw new TransactionException("Received COMMIT event, but currentTransaction is empty!" + currentTransaction);
-//                    //dropTransaction();
-//                    //return true;
-//                    //throw new TransactionException("Got COMMIT while not in transaction: " + currentTransaction);
-//                }
                 return false;
 
             case MySQLConstants.ROTATE_EVENT:
@@ -760,7 +740,7 @@ public class PipelineOrchestrator extends Thread {
     }
 
     private boolean isTransactionSizeLimitExceeded() {
-        return (currentTransaction.getEventsCounter() > TRANSACTION_SIZE_LIMIT);
+        return configuration.getOrchestratorConfiguration().isRewindingEnabled() && (currentTransaction.getEventsCounter() > orchestratorConfiguration.getRewindingThreshold());
     }
 
     private void doTimestampOverride(BinlogEventV4 event) {

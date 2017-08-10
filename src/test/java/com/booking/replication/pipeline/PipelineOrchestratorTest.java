@@ -26,6 +26,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.concurrent.BlockingQueue;
@@ -109,10 +110,14 @@ public class PipelineOrchestratorTest {
     @Test(expected = TransactionSizeLimitException.class)
     public void TransactionSizeLimitExceeded() throws Exception {
         PipelineOrchestrator pipelineOrchestrator = new PipelineOrchestrator(replicatorQueues, pipelinePosition, configuration, applier, replicantPool, binlogEventProducer, 0L, false);
+        Field orchestratorConfigurationField= pipelineOrchestrator.getClass().getDeclaredField("orchestratorConfiguration");
+        orchestratorConfigurationField.setAccessible(true);
+        Configuration.OrchestratorConfiguration orchestratorConfiguration = (Configuration.OrchestratorConfiguration) orchestratorConfigurationField.get(pipelineOrchestrator);
+
         pipelineOrchestrator.beginTransaction();
 
         assertFalse(pipelineOrchestrator.getCurrentTransaction().hasEvents());
-        for (int i = 0; i < PipelineOrchestrator.TRANSACTION_SIZE_LIMIT + 2; i++) {
+        for (int i = 0; i < orchestratorConfiguration.getRewindingThreshold() + 2; i++) {
             WriteRowsEventV2 queryEvent = new WriteRowsEventV2(new BinlogEventV4HeaderImpl());
             pipelineOrchestrator.addEventIntoTransaction(queryEvent);
         }

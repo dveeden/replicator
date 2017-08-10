@@ -73,16 +73,16 @@ public class CurrentTransaction {
         return xid;
     }
 
-    public void setXid(long xid) {
+    void setXid(long xid) {
         this.xid = xid;
     }
 
-    public QueryEvent getBeginEvent() {
+    QueryEvent getBeginEvent() {
         return beginEvent;
     }
 
 
-    public void setFinishEvent(XidEvent finishEvent) throws TransactionException {
+    void setFinishEvent(XidEvent finishEvent) throws TransactionException {
         // xa-capable engines block (InnoDB)
         if (this.finishEvent == null) {
             setXid(finishEvent.getXid());
@@ -98,7 +98,7 @@ public class CurrentTransaction {
         }
     }
 
-    public void setFinishEvent(QueryEvent finishEvent) throws TransactionException {
+    void setFinishEvent(QueryEvent finishEvent) throws TransactionException {
         // MyIsam block
         if (!QueryEventType.COMMIT.equals(QueryInspector.getQueryEventType(finishEvent))) {
             throw new TransactionException("Can't set finishEvent for transaction to a wrong event type: " + finishEvent);
@@ -123,22 +123,22 @@ public class CurrentTransaction {
         }
     }
 
-    public BinlogEventV4 getFinishEvent() {
+    BinlogEventV4 getFinishEvent() {
         return finishEvent;
     }
 
-    public boolean hasBeginEvent() {
+    boolean hasBeginEvent() {
         return (beginEvent != null);
     }
-    public boolean hasFinishEvent() {
+    boolean hasFinishEvent() {
         return (finishEvent != null);
     }
 
-    public void addEvent(BinlogEventV4 event) {
+    void addEvent(BinlogEventV4 event) {
         events.add(event);
     }
 
-    public boolean hasEvents() {
+    boolean hasEvents() {
         return (events.peek() != null);
     }
 
@@ -146,32 +146,32 @@ public class CurrentTransaction {
         return events;
     }
 
-    public long getEventsCounter() {
+    long getEventsCounter() {
         return events.size();
     }
 
-    public void clearEvents() {
+    void clearEvents() {
         events = new LinkedList<>();
     }
 
-    public void setBeginEventTimestamp(long timestamp) throws TransactionException {
+    void setBeginEventTimestamp(long timestamp) throws TransactionException {
         ((BinlogEventV4HeaderImpl) beginEvent.getHeader()).setTimestamp(timestamp);
     }
 
-    public void setBeginEventTimestampToFinishEvent() throws TransactionException {
+    void setBeginEventTimestampToFinishEvent() throws TransactionException {
         if (!hasFinishEvent()) {
             throw new TransactionException("Can't set timestamp to timestamp of finish event while no finishEvent exists");
         }
         setBeginEventTimestamp(finishEvent.getHeader().getTimestamp());
     }
 
-    public void setEventsTimestamp(long timestamp) throws TransactionException {
+    void setEventsTimestamp(long timestamp) throws TransactionException {
         for (BinlogEventV4 event : events) {
             ((BinlogEventV4HeaderImpl) event.getHeader()).setTimestamp(timestamp);
         }
     }
 
-    public void setEventsTimestampToFinishEvent() throws TransactionException {
+    void setEventsTimestampToFinishEvent() throws TransactionException {
         if (!hasFinishEvent()) {
             throw new TransactionException("Can't set timestamp to timestamp of finish event while no finishEvent exists");
         }
@@ -233,7 +233,7 @@ public class CurrentTransaction {
         return isRewinded;
     }
 
-    public void setRewinded(boolean rewinded) {
+    void setRewinded(boolean rewinded) {
         isRewinded = rewinded;
     }
 
@@ -245,12 +245,12 @@ public class CurrentTransaction {
         return firstMapEventInTransaction;
     }
 
-    public boolean hasMappingInTransaction() {
+    boolean hasMappingInTransaction() {
         return firstMapEventInTransaction != null;
     }
 
 
-    public Map<String, TableMapEvent> getCurrentTransactionTableMapEvents() {
+    Map<String, TableMapEvent> getCurrentTransactionTableMapEvents() {
         return currentTransactionTableMapEvents;
     }
 

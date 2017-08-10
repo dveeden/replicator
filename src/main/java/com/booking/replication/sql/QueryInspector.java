@@ -161,12 +161,12 @@ public class QueryInspector {
 
         if (isCommit(querySQL, isDDLTable)) {
             return QueryEventType.COMMIT;
+        } else if (isDDLDefiner(querySQL)) {
+            return QueryEventType.DDLDEFINER;
         } else if (isBegin(querySQL, isDDLTable)) {
             return QueryEventType.BEGIN;
         } else if (isPseudoGTID(querySQL)) {
             return QueryEventType.PSEUDOGTID;
-        } else if (isDDLDefiner(querySQL)) {
-            return QueryEventType.DDLDEFINER;
         } else if (isDDLTable) {
             return QueryEventType.DDLTABLE;
         } else if (isDDLTemporaryTable(querySQL)) {

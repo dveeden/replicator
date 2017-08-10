@@ -150,8 +150,10 @@ public class Configuration {
         public List<String> tables;
         public List<String> excludetables;
         public String topic;
-        public Boolean apply_begin_event = false;
-        public Boolean apply_commit_event = false;
+        @JsonProperty("apply_begin_event")
+        public Boolean applyBeginEvent = false;
+        @JsonProperty("apply_commit_event")
+        public Boolean applyCommitEvent = false;
     }
 
     public static class ValidationConfiguration {
@@ -219,6 +221,30 @@ public class Configuration {
 
     public HashMap<String, MetricsConfig.ReporterConfig> getMetricReporters() {
         return metrics.reporters;
+    }
+
+
+    public static class OrchestratorConfiguration {
+        @JsonProperty("rewinding_threshold")
+        private long rewindingThreshold = 500;
+        @JsonProperty("rewinding_enabled")
+        private boolean rewindingEnabled = true;
+
+        public long getRewindingThreshold() {
+            return rewindingThreshold;
+        }
+
+        public boolean isRewindingEnabled() {
+            return rewindingEnabled;
+        }
+    }
+
+    @JsonDeserialize
+    @JsonProperty("orchestrator")
+    public OrchestratorConfiguration orchestratorConfiguration = new OrchestratorConfiguration();
+
+    public OrchestratorConfiguration getOrchestratorConfiguration(){
+        return orchestratorConfiguration;
     }
 
     /**
@@ -509,9 +535,9 @@ public class Configuration {
         return kafka.topic;
     }
 
-    public boolean isKafkaApplyBeginEvent() { return kafka.apply_begin_event; }
+    public boolean isKafkaApplyBeginEvent() { return kafka.applyBeginEvent; }
 
-    public boolean isKafkaApplyCommitEvent() { return kafka.apply_commit_event; }
+    public boolean isKafkaApplyCommitEvent() { return kafka.applyCommitEvent; }
 
     public boolean isDryRunMode() {
         return dryRunMode;

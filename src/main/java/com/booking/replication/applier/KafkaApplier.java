@@ -171,7 +171,7 @@ public class KafkaApplier implements Applier {
     @Override
     public void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
         if (!apply_begin_event) {
-            LOGGER.debug("Dropping BEGIN event because apply_begin_event is off");
+            LOGGER.debug("Dropping BEGIN event because applyBeginEvent is off");
             return;
         }
         LOGGER.debug("Applying BEGIN event");
@@ -191,7 +191,7 @@ public class KafkaApplier implements Applier {
     @Override
     public void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
         if (!apply_commit_event) {
-            LOGGER.debug("Dropping COMMIT event because apply_commit_event is off");
+            LOGGER.debug("Dropping COMMIT event because applyCommitEvent is off");
             return;
         }
         LOGGER.debug("Applying COMMIT event");
@@ -211,7 +211,7 @@ public class KafkaApplier implements Applier {
     @Override
     public void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction) {
         if (!apply_commit_event) {
-            LOGGER.debug("Dropping XID event because apply_begin_event is off");
+            LOGGER.debug("Dropping XID event because applyBeginEvent is off");
             return;
         }
         LOGGER.debug("Applying XID event");
