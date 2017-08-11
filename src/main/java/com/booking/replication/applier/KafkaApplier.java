@@ -12,6 +12,7 @@ import com.booking.replication.augmenter.AugmentedSchemaChangeEvent;
 import com.booking.replication.pipeline.CurrentTransaction;
 import com.booking.replication.pipeline.PipelineOrchestrator;
 
+import com.booking.replication.pipeline.PipelinePosition;
 import com.booking.replication.schema.exception.TableMapException;
 import com.google.code.or.binlog.BinlogEventV4;
 import com.google.code.or.binlog.impl.event.FormatDescriptionEvent;
@@ -74,6 +75,7 @@ public class KafkaApplier implements Applier {
     private final boolean apply_commit_event;
     private final boolean apply_uuid;
     private final boolean apply_xid;
+    private final boolean gtidKey;
     private AtomicBoolean exceptionFlag = new AtomicBoolean(false);
 
     private final Meter meterForMessagesPushedToKafka;
@@ -131,6 +133,7 @@ public class KafkaApplier implements Applier {
         apply_commit_event = configuration.isKafkaApplyCommitEvent();
         apply_uuid = configuration.getAugmenterApplyUuid();
         apply_xid = configuration.getAugmenterApplyXid();
+        gtidKey = true; // TODO: config
         this.meterForMessagesPushedToKafka = meterForMessagesPushedToKafka;
 
         if (!DRY_RUN) {
@@ -151,7 +154,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedDataEvent, CurrentTransaction currentTransaction) {
+    public void applyAugmentedRowsEvent(AugmentedRowsEvent augmentedDataEvent, CurrentTransaction currentTransaction, PipelinePosition pipelinePosition) {
         for (AugmentedRow augmentedRow : augmentedDataEvent.getSingleRowEvents()) {
             if (exceptionFlag.get()) throw new RuntimeException("Producer has problem with sending messages, could be a connection issue");
             if (augmentedRow.getTableName() == null) throw new RuntimeException("tableName does not exist");
@@ -169,7 +172,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
+    public void applyBeginQueryEvent(QueryEvent event, CurrentTransaction currentTransaction, PipelinePosition pipelinePosition) {
         if (!apply_begin_event) {
             LOGGER.debug("Dropping BEGIN event because applyBeginEvent is off");
             return;
@@ -179,7 +182,9 @@ public class KafkaApplier implements Applier {
 
         AugmentedRow augmentedRow;
         try {
-            augmentedRow = new AugmentedRow(event.getBinlogFilename(), 0, null, null, "BEGIN", event.getHeader(), currentTransaction.getUuid(), currentTransaction.getXid(), apply_uuid, apply_xid);
+            augmentedRow = new AugmentedRow(event.getBinlogFilename(), 0, null, null, "BEGIN", event.getHeader(),
+                    pipelinePosition.getCurrentPseudoGTID(), pipelinePosition.getCurrentPseudoGTIDRelativeEventsCounter(),
+                    currentTransaction.getUuid(), currentTransaction.getXid(), apply_uuid, apply_xid);
         } catch (TableMapException e) {
             throw new RuntimeException("Failed to create AugmentedRow for BEGIN event: ", e);
         }
@@ -189,7 +194,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction) {
+    public void applyCommitQueryEvent(QueryEvent event, CurrentTransaction currentTransaction, PipelinePosition pipelinePosition) {
         if (!apply_commit_event) {
             LOGGER.debug("Dropping COMMIT event because applyCommitEvent is off");
             return;
@@ -199,7 +204,9 @@ public class KafkaApplier implements Applier {
 
         AugmentedRow augmentedRow;
         try {
-            augmentedRow = new AugmentedRow(event.getBinlogFilename(), 0, null, null, "COMMIT", event.getHeader(), currentTransaction.getUuid(), currentTransaction.getXid(), apply_uuid, apply_xid);
+            augmentedRow = new AugmentedRow(event.getBinlogFilename(), 0, null, null, "COMMIT", event.getHeader(),
+                    pipelinePosition.getCurrentPseudoGTID(), pipelinePosition.getCurrentPseudoGTIDRelativeEventsCounter(),
+                    currentTransaction.getUuid(), currentTransaction.getXid(), apply_uuid, apply_xid);
         } catch (TableMapException e) {
             throw new RuntimeException("Failed to create AugmentedRow for COMMIT event: ", e);
         }
@@ -209,7 +216,7 @@ public class KafkaApplier implements Applier {
     }
 
     @Override
-    public void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction) {
+    public void applyXidEvent(XidEvent event, CurrentTransaction currentTransaction, PipelinePosition pipelinePosition) {
         if (!apply_commit_event) {
             LOGGER.debug("Dropping XID event because applyBeginEvent is off");
             return;
@@ -219,7 +226,9 @@ public class KafkaApplier implements Applier {
 
         AugmentedRow augmentedRow;
         try {
-            augmentedRow = new AugmentedRow(event.getBinlogFilename(), 0, null, null, "XID", event.getHeader(), currentTransaction.getUuid(), currentTransaction.getXid(), apply_uuid, apply_xid);
+            augmentedRow = new AugmentedRow(event.getBinlogFilename(), 0, null, null, "XID", event.getHeader(),
+                    pipelinePosition.getCurrentPseudoGTID(), pipelinePosition.getCurrentPseudoGTIDRelativeEventsCounter(),
+                    currentTransaction.getUuid(), currentTransaction.getXid(), apply_uuid, apply_xid);
         } catch (TableMapException e) {
             throw new RuntimeException("Failed to create AugmentedRow for XID event: ", e);
         }
@@ -356,6 +365,13 @@ public class KafkaApplier implements Applier {
         return (DRY_RUN) ? 0 : (hashCode % numberOfPartition + numberOfPartition) % numberOfPartition;
     }
 
+    private String getKafkaKey(RowListMessage rowListMessage) {
+        if (gtidKey) {
+            re
+        } else {
+            return rowListMessage.getMessageBinlogPositionID();
+        }
+    }
     private void pushToBuffer(int partitionNum, AugmentedRow augmentedRow) {
         // Push to Kafka broker one of the following is true:
         //     1. there are no rows on current partition
@@ -428,7 +444,7 @@ public class KafkaApplier implements Applier {
         ProducerRecord<String, String> message = new ProducerRecord<>(
                 topicName,
                 partitionNum,
-                rowListMessage.getMessageBinlogPositionID(),
+                getKafkaKey(rowListMessage),
                 jsonMessage);
 
         producer.send(message, (recordMetadata, sendException) -> {

@@ -18,6 +18,7 @@ public class RowListMessage {
     // metadata
     private int     messageSize;
     private String  messageBinlogPositionID;
+    private String  messagePseudoGTIDRelativeEventID;
 
     private String  firstRowBinlogPositionID;
     private String  lastRowBinlogPositionID;
@@ -37,6 +38,7 @@ public class RowListMessage {
         this.messageSize              = messageSize;
         this.firstRowBinlogPositionID = rowsInitialBucket.get(0).getRowBinlogPositionID();
         this.messageBinlogPositionID  = "M-" + firstRowBinlogPositionID;
+        this.messagePseudoGTIDRelativeEventID = rowsInitialBucket.get(0).getRowPseudoGTIDPositionID();
         this.isOpen                   = true; // TODO: add separate 'committed' property
 
         // init payload

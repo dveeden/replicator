@@ -2,7 +2,6 @@ package com.booking.replication.pipeline.event.handler;
 
 import com.booking.replication.Coordinator;
 import com.booking.replication.Metrics;
-import com.booking.replication.applier.Applier;
 import com.booking.replication.applier.ApplierException;
 import com.booking.replication.applier.HBaseApplier;
 import com.booking.replication.applier.hbase.TaskBufferInconsistencyException;
@@ -108,6 +107,7 @@ public class QueryEventHandler implements BinlogEventV4Handler {
 
                     pipelinePosition.setCurrentPseudoGTID(pseudoGTID);
                     pipelinePosition.setCurrentPseudoGTIDFullQuery(querySQL);
+                    pipelinePosition.setCurrentPseudoGTIDRelativeEventsCounter(0L);
                     if (eventHandlerConfiguration.getApplier() instanceof HBaseApplier) {
                         try {
                             ((HBaseApplier) eventHandlerConfiguration.getApplier()).applyPseudoGTIDEvent(new LastCommittedPositionCheckpoint(

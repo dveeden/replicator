@@ -4,6 +4,7 @@ import static com.codahale.metrics.MetricRegistry.name;
 
 import com.booking.replication.Metrics;
 import com.booking.replication.pipeline.CurrentTransaction;
+import com.booking.replication.pipeline.PipelinePosition;
 import com.booking.replication.schema.ActiveSchemaVersion;
 import com.booking.replication.schema.column.ColumnSchema;
 import com.booking.replication.schema.column.types.Converter;
@@ -463,7 +464,7 @@ public class EventAugmenter {
         return augEventGroup;
     }
 
-    private AugmentedRowsEvent augmentUpdateRowsEvent(UpdateRowsEvent upEvent, CurrentTransaction currentTransaction) throws TableMapException {
+    private AugmentedRowsEvent augmentUpdateRowsEvent(UpdateRowsEvent upEvent, CurrentTransaction currentTransaction, PipelinePosition pipelinePosition) throws TableMapException {
 
         // table name
         String tableName = currentTransaction.getTableNameFromID(upEvent.getTableId());
