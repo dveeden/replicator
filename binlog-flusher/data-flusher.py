@@ -6,6 +6,7 @@ import logging
 import MySQLdb
 import MySQLdb.cursors
 import sys
+import os
 import Queue
 import threading
 from threading import Thread
@@ -302,8 +303,10 @@ class DataFlusher(object):
 @click.option('--skip', required=False, help='comma separated list of skip schemas')
 def run(mycnf, db, table, stop_slave, start_slave, method, host, skip):
     flusher = DataFlusher()
+    if not os.path.exists(mycnf):
+        logging.warning("config file %s does not exist", mycnf)
     config = {
-        'source' : mycnf,
+        'source' : os.path.abspath(mycnf),
         'skip': ['sys', 'mysql', 'information_schema', 'performance_schema']
     }
     if host:
