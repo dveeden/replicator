@@ -14,6 +14,25 @@ import signal
 from time import sleep
 from operator import itemgetter
 
+def bytesfmt(num, suffix='B'):
+    for unit in ['','Ki','Mi','Gi','Ti','Pi','Ei','Zi']:
+        if abs(num) < 1024.0:
+            return "%3.1f%s%s" % (num, unit, suffix)
+        num /= 1024.0
+    return "%.1f%s%s" % (num, 'Yi', suffix)
+
+def check_minfree(fs, minfree):
+    """Return True if 'fs' has more than 'minfree' MB of free space"""
+
+    fsinfo = os.statvfs(fs)
+    free_bytes = fsinfo.f_bavail * fsinfo.f_bsize
+    minfree_bytes = minfree * 1024 * 1024
+    logger.info("check_minfree: %s > %s = %s",
+                bytesfmt(free_bytes), bytesfmt(minfree_bytes), free_bytes>minfree_bytes)
+    if free_bytes > minfree_bytes:
+        return True
+    return False
+
 class Cursor(MySQLdb.cursors.CursorStoreResultMixIn, MySQLdb.cursors.CursorTupleRowsMixIn, MySQLdb.cursors.BaseCursor):
     pass
 
@@ -31,6 +50,10 @@ class CopyProcess(Thread):
                 table = self.queue.get(False)
                 if 'table' in self.config and table[1] not in self.config['table']:
                     continue
+                if 'minfree' in self.config:
+                    while not check_minfree(self.config['minfree_dir'], self.config['minfree']):
+                        logger.warning("Less that %d MB available on %s, waiting..", self.config['minfree'], self.config['minfree_dir'])
+                        sleep(30)
                 self.main.do_copy(self.config, table)
                 self.queue.task_done()
             except Queue.Empty as e:
@@ -301,10 +324,12 @@ class DataFlusher(object):
 @click.option('--method', default='BlackholeCopy', help='Copy method class')
 @click.option('--host', help='Host name', required=True)
 @click.option('--skip', required=False, help='comma separated list of skip schemas')
-def run(mycnf, db, table, stop_slave, start_slave, method, host, skip):
+@click.option('--minfree', required=False, help='Wait if less than x MB free', type=int)
+@click.option('--minfree_dir', required=False, help='Directory to monitor for free space (default: use log_bin_basename)')
+def run(mycnf, db, table, stop_slave, start_slave, method, host, skip, minfree, minfree_dir):
     flusher = DataFlusher()
     if not os.path.exists(mycnf):
-        logging.warning("config file %s does not exist", mycnf)
+        logger.warning("config file %s does not exist", mycnf)
     config = {
         'source' : os.path.abspath(mycnf),
         'skip': ['sys', 'mysql', 'information_schema', 'performance_schema']
@@ -317,11 +342,24 @@ def run(mycnf, db, table, stop_slave, start_slave, method, host, skip):
         config['table'] = table.split(',')
     if skip:
         config['skip'].append(skip.split(','))
+    if minfree:
+        config['minfree'] = minfree
     conDis = ConnectionDispatch(config)
     conDis.start()
     tables = flusher.get_tables(conDis, config)
     source = conDis.get_source()
     cursor = source.cursor()
+    if minfree_dir:
+        if not os.path.exists(minfree_dir):
+            raise ValueError("minfree_dir points to nonexistend directory %s" % minfree_dir)
+        config['minfree_dir'] = minfree_dir
+    else:
+        try:
+            cursor.execute("SELECT @@global.log_bin_basename")
+            config['minfree_dir'] = os.path.dirname(cursor.fetchone()[0])
+        except MySQLdb.OperationalError as e:
+            logger.warning("Could not retrieve log_bin_basename from the database (err: %s), using '/' instead to monitor freespace.", e)
+            config['minfree_dir'] = '/'
     if stop_slave:
         sql = 'stop slave'
         logger.info(sql)
