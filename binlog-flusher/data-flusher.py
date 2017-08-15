@@ -299,7 +299,7 @@ class DataFlusher(object):
 @click.option('--stop-slave/--no-stop-slave', default=True, help='stop the replication thread whilst running the copy')
 @click.option('--start-slave/--no-start-slave', default=False, help='restart the replication thread after running the copy')
 @click.option('--method', default='BlackholeCopy', help='Copy method class')
-@click.option('--host', help='Host name')
+@click.option('--host', help='Host name', required=True)
 @click.option('--skip', required=False, help='comma separated list of skip schemas')
 def run(mycnf, db, table, stop_slave, start_slave, method, host, skip):
     flusher = DataFlusher()
