@@ -1,6 +1,7 @@
 *.iml
 *.log
 *.txt
+*.cnf
 .idea/
 dependency-reduced-pom.xml
 target
