@@ -100,7 +100,7 @@ def get_tables(config):
 @click.option('--skip', required=False, help='comma separated list of skip schemas')
 def run(mycnf, db, table, stop_slave, start_slave, method, host, hashfile, skip):
     if not os.path.exists(mycnf):
-        logging.warning("config file %s does not exist", mycnf)
+        logger.warning("config file %s does not exist", mycnf)
     config = {
         'source' : os.path.abspath(mycnf),
         'skip': ['sys', 'mysql', 'information_schema', 'performance_schema']
